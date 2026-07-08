@@ -163,15 +163,15 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
     <div id="sec-dashboard" class="section active">
       <div class="grid4" id="stat-cards"></div>
       <div class="flex-row" style="margin-bottom:20px">
-        <div class="card" style="flex:2"><div class="card-title">Despesas Mensais 2026</div><canvas id="ch-bar" height="200"></canvas></div>
-        <div class="card" style="flex:1"><div class="card-title">Categorias Admin</div><canvas id="ch-pie" height="180"></canvas><div id="pie-legend" style="margin-top:8px;display:flex;flex-direction:column;gap:4px"></div></div>
+        <div class="card" style="flex:2"><div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>Despesas Mensais 2026</span><button class="print-btn" onclick="printCard(this)" style="background:#f97316;border:none;color:#fff;font-size:11px;font-weight:600;padding:4px 10px;border-radius:5px;cursor:pointer">&#128424; Imprimir</button></div><canvas id="ch-bar" height="200"></canvas></div>
+        <div class="card" style="flex:1"><div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>Categorias Admin</span><button class="print-btn" onclick="printCard(this)" style="background:#f97316;border:none;color:#fff;font-size:11px;font-weight:600;padding:4px 10px;border-radius:5px;cursor:pointer">&#128424; Imprimir</button></div><canvas id="ch-pie" height="180"></canvas><div id="pie-legend" style="margin-top:8px;display:flex;flex-direction:column;gap:4px"></div></div>
       </div>
       <div class="card" style="margin-bottom:20px">
-        <div class="card-title">Custo por Fornecedor - Top 15</div>
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>Custo por Fornecedor - Top 15</span><button class="print-btn" onclick="printCard(this)" style="background:#f97316;border:none;color:#fff;font-size:11px;font-weight:600;padding:4px 10px;border-radius:5px;cursor:pointer">&#128424; Imprimir</button></div>
         <div style="font-size:12px;color:var(--m2);margin-bottom:10px">Baseado nos lancamentos de Manutencao/Pecas</div>
         <canvas id="ch-sup" height="250"></canvas>
       </div>
-      <div class="card"><div class="card-title">Resumo Mensal</div>
+      <div class="card"><div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>Resumo Mensal</span><button class="print-btn" onclick="printCard(this)" style="background:#f97316;border:none;color:#fff;font-size:11px;font-weight:600;padding:4px 10px;border-radius:5px;cursor:pointer">&#128424; Imprimir</button></div>
         <table><thead><tr><th>Mes</th><th>Manutencao</th><th>Administrativo</th><th>Total</th></tr></thead>
         <tbody id="dash-table-body"></tbody></table>
       </div>
@@ -284,8 +284,9 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
           </select>
           <select id="expense-month" class="form-select" style="width:auto;padding:8px 12px;font-size:12px" onchange="renderExpenses()"></select>
           <select id="expense-cat" class="form-select" style="width:auto;padding:8px 12px;font-size:12px" onchange="renderExpenses()"></select>
+          <select id="expense-payment" class="form-select" style="width:auto;padding:8px 12px;font-size:12px" onchange="renderExpenses()"></select>
         </div>
-        <button class="btn btn-p" id="expense-add-btn" onclick="openExpenseModal()">+ Lancar</button>
+        <button class="btn btn-g" onclick="printExpensesReport()" style="margin-right:8px">&#128424; Imprimir</button><button class="btn btn-p" id="expense-add-btn" onclick="openExpenseModal()">+ Lancar</button>
       </div>
       <div style="display:flex;gap:12px;margin-bottom:14px">
         <div class="card-sm" style="min-width:180px">
@@ -685,15 +686,15 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
     <div id="sec-dashboard" class="section active">
       <div class="grid4" id="stat-cards"></div>
       <div class="flex-row" style="margin-bottom:20px">
-        <div class="card" style="flex:2"><div class="card-title">Despesas Mensais 2026</div><canvas id="ch-bar" height="200"></canvas></div>
-        <div class="card" style="flex:1"><div class="card-title">Categorias Admin</div><canvas id="ch-pie" height="180"></canvas><div id="pie-legend" style="margin-top:8px;display:flex;flex-direction:column;gap:4px"></div></div>
+        <div class="card" style="flex:2"><div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>Despesas Mensais 2026</span><button class="print-btn" onclick="printCard(this)" style="background:#f97316;border:none;color:#fff;font-size:11px;font-weight:600;padding:4px 10px;border-radius:5px;cursor:pointer">&#128424; Imprimir</button></div><canvas id="ch-bar" height="200"></canvas></div>
+        <div class="card" style="flex:1"><div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>Categorias Admin</span><button class="print-btn" onclick="printCard(this)" style="background:#f97316;border:none;color:#fff;font-size:11px;font-weight:600;padding:4px 10px;border-radius:5px;cursor:pointer">&#128424; Imprimir</button></div><canvas id="ch-pie" height="180"></canvas><div id="pie-legend" style="margin-top:8px;display:flex;flex-direction:column;gap:4px"></div></div>
       </div>
       <div class="card" style="margin-bottom:20px">
-        <div class="card-title">Custo por Fornecedor - Top 15</div>
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>Custo por Fornecedor - Top 15</span><button class="print-btn" onclick="printCard(this)" style="background:#f97316;border:none;color:#fff;font-size:11px;font-weight:600;padding:4px 10px;border-radius:5px;cursor:pointer">&#128424; Imprimir</button></div>
         <div style="font-size:12px;color:var(--m2);margin-bottom:10px">Baseado nos lancamentos de Manutencao/Pecas</div>
         <canvas id="ch-sup" height="250"></canvas>
       </div>
-      <div class="card"><div class="card-title">Resumo Mensal</div>
+      <div class="card"><div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>Resumo Mensal</span><button class="print-btn" onclick="printCard(this)" style="background:#f97316;border:none;color:#fff;font-size:11px;font-weight:600;padding:4px 10px;border-radius:5px;cursor:pointer">&#128424; Imprimir</button></div>
         <table><thead><tr><th>Mes</th><th>Manutencao</th><th>Administrativo</th><th>Total</th></tr></thead>
         <tbody id="dash-table-body"></tbody></table>
       </div>
@@ -806,8 +807,9 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
           </select>
           <select id="expense-month" class="form-select" style="width:auto;padding:8px 12px;font-size:12px" onchange="renderExpenses()"></select>
           <select id="expense-cat" class="form-select" style="width:auto;padding:8px 12px;font-size:12px" onchange="renderExpenses()"></select>
+          <select id="expense-payment" class="form-select" style="width:auto;padding:8px 12px;font-size:12px" onchange="renderExpenses()"></select>
         </div>
-        <button class="btn btn-p" id="expense-add-btn" onclick="openExpenseModal()">+ Lancar</button>
+        <button class="btn btn-g" onclick="printExpensesReport()" style="margin-right:8px">&#128424; Imprimir</button><button class="btn btn-p" id="expense-add-btn" onclick="openExpenseModal()">+ Lancar</button>
       </div>
       <div style="display:flex;gap:12px;margin-bottom:14px">
         <div class="card-sm" style="min-width:180px">
@@ -2318,19 +2320,57 @@ function buildExpenseFilters() {
   var cm = em ? em.value : "", cc = ec ? ec.value : "";
   if (em) { em.innerHTML = '<option value="">Todos os meses</option>' + months.map(function(m){return '<option value="'+m+'"'+(cm===m?" selected":"")+'>'+m+'</option>';}).join(""); }
   if (ec) { ec.innerHTML = '<option value="">Todas categorias</option>' + Object.keys(cats).map(function(k){return '<option value="'+k+'"'+(cc===k?" selected":"")+'>'+cats[k]+'</option>';}).join(""); }
+  var ep = ge("expense-payment"); var cp = ep ? ep.value : "";
+  if (ep) {
+    var pgs = [];
+    data.forEach(function(e){ var pv = e.payment||""; if (pv && pgs.indexOf(pv)<0) pgs.push(pv); });
+    pgs.sort();
+    ep.innerHTML = '<option value="">Todos pagamentos</option>' + pgs.map(function(pv){return '<option value="'+pv+'"'+(cp===pv?" selected":"")+'>'+pv+'</option>';}).join("");
+  }
   var btn = ge("expense-add-btn"); if (btn) btn.textContent = expenseTab==="manut" ? "+ Lancar Compra/NF" : "+ Lancar Despesa Admin";
   var tn = ge("th-nf"), ts = ge("th-sup"); if(tn) tn.textContent=expenseTab==="manut"?"NF":"--"; if(ts) ts.textContent=expenseTab==="manut"?"Fornecedor":"Beneficiario";
+}
+function printCard(btn){
+  var card = btn.closest('.card') || btn.closest('.card-sm'); if(!card) return;
+  var clone = card.cloneNode(true);
+  var sc = card.querySelectorAll('canvas'), cc = clone.querySelectorAll('canvas');
+  for (var i=0;i<sc.length;i++){ try{ var img=document.createElement('img'); img.src=sc[i].toDataURL('image/png'); img.style.maxWidth='100%'; if(cc[i]&&cc[i].parentNode) cc[i].parentNode.replaceChild(img,cc[i]); }catch(e){} }
+  var pb=clone.querySelector('.print-btn'); if(pb&&pb.parentNode) pb.parentNode.removeChild(pb);
+  var w=window.open('','_blank'); if(!w){ showToast('Permita pop-ups para imprimir',true); return; }
+  w.document.write('<html><head><meta charset="utf-8"><title>Impressao - TRANSCCEMA</title><style>body{font-family:Arial,Helvetica,sans-serif;padding:20px;color:#111}.card-title{font-size:18px;font-weight:700;margin-bottom:12px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:6px 8px;font-size:12px;text-align:left}th{background:#f3f3f3}img{max-width:100%}</style></head><body>');
+  w.document.write('<div style="text-align:center;margin-bottom:14px;font-weight:800;font-size:16px">TRANSCCEMA Transportes</div>');
+  w.document.write(clone.innerHTML);
+  w.document.write('<div style="margin-top:14px;font-size:10px;color:#777">Emitido em '+new Date().toLocaleString('pt-BR')+'</div>');
+  w.document.write('</body></html>'); w.document.close();
+  setTimeout(function(){ w.focus(); w.print(); }, 350);
+}
+function printExpensesReport(){
+  var tbl=ge("expense-table-body");
+  var total=ge("expense-total")?ge("expense-total").textContent:"";
+  var count=ge("expense-count")?ge("expense-count").textContent:"";
+  var tab=expenseTab==="manut"?"Compras / NF (Manutencao)":"Despesas Administrativas";
+  var fpay=gv("expense-payment")||"Todos", fmn=gv("expense-month")||"Todos", fca=gv("expense-cat")||"Todas";
+  var head='<tr><th>Data</th><th>Mes</th><th>NF</th><th>Benef./Fornecedor</th><th>Descricao</th><th>Categoria</th><th>Valor</th><th>Pgto</th></tr>';
+  var body='', trs=tbl?tbl.querySelectorAll('tr'):[];
+  for(var i=0;i<trs.length;i++){ var tds=trs[i].querySelectorAll('td'); if(tds.length<8){ body+='<tr><td colspan="8" style="text-align:center">'+(tds[0]?tds[0].innerText:'')+'</td></tr>'; continue; } body+='<tr>'; for(var j=0;j<8;j++){ body+='<td>'+tds[j].innerText+'</td>'; } body+='</tr>'; }
+  var w=window.open('','_blank'); if(!w){ showToast('Permita pop-ups para imprimir',true); return; }
+  w.document.write('<html><head><meta charset="utf-8"><title>Relatorio de Despesas - TRANSCCEMA</title><style>body{font-family:Arial,Helvetica,sans-serif;padding:20px;color:#111}h1{font-size:17px;margin:0 0 4px}.meta{font-size:12px;color:#555;margin-bottom:12px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:5px 7px;font-size:11px;text-align:left}th{background:#f3f3f3}</style></head><body>');
+  w.document.write('<h1>TRANSCCEMA - '+tab+'</h1>');
+  w.document.write('<div class="meta">Filtros: mes='+fmn+' | categoria='+fca+' | pagamento='+fpay+' &nbsp;|&nbsp; '+count+' &nbsp;|&nbsp; <b>Total: '+total+'</b><br>Emitido em '+new Date().toLocaleString('pt-BR')+'</div>');
+  w.document.write('<table><thead>'+head+'</thead><tbody>'+body+'</tbody></table>'); w.document.write('</body></html>'); w.document.close();
+  setTimeout(function(){ w.focus(); w.print(); }, 350);
 }
 function renderExpenses() {
   var data = expenseTab==="manut" ? manut : adminExp;
   var cats = expenseTab==="manut" ? CAT_MAN : CAT_ADM;
   var cc = expenseTab==="manut" ? CC_MAN : CC_ADM;
   var q = (gv("expense-search")||"").toLowerCase(), fm = gv("expense-month")||"", fc = gv("expense-cat")||"";
-  var fp = gv("expense-periodo")||"";
+  var fp = gv("expense-periodo")||""; var fpay = gv("expense-payment")||"";
   var filtered = data.filter(function(e){
     return !e.deleted
       && (!q || (e.description||"").toLowerCase().indexOf(q)>=0 || (e.supplier||e.beneficiary||"").toLowerCase().indexOf(q)>=0)
       && (!fm || e.month===fm) && (!fc || e.category===fc)
+      && (!fpay || e.payment===fpay)
       && dentroDoPeriodo(e.date, fp);
   });
   var tot = filtered.reduce(function(s,e){return s+e.value;},0);
@@ -2350,7 +2390,7 @@ function renderExpenses() {
   for (var i = 0; i < rows.length; i++) {
     var e = rows[i];
     var ecol = cc[e.category]||"#8b5cf6", ecn = cats[e.category]||e.category||"--";
-    var pb = e.payment==="Faturado"||e.payment==="Transferencia"?"b-bl":e.payment==="PIX"?"b-te":e.payment==="Pago"?"b-gn":"b-gr";
+    var pb = (e.payment&&e.payment.indexOf("PIX")>=0)?"b-te":(e.payment==="Faturado"||e.payment&&e.payment.indexOf("Transfer")>=0)?"b-bl":e.payment==="Pago"?"b-gn":"b-gr";
     tblHtml += '<tr><td style="white-space:nowrap">' + fmtD(e.date) + '</td><td>' + (e.month||"--") + '</td>'
       + '<td>' + (isM ? esc(e.nfNumber||"--") : "--") + '</td>'
       + '<td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(isM?(e.supplier||"--"):(e.beneficiary||"--")) + '</td>'
@@ -2373,7 +2413,7 @@ function deleteExpense(id) {
 }
 function openExpenseModal() {
   var isM = expenseTab==="manut", cats = isM?CAT_MAN:CAT_ADM;
-  var pays = isM ? ["Faturado","Pago","A Pagar","Cartao"] : ["PIX","Transferencia","Boleto","Cartao"];
+  var pays = isM ? ["Faturado","Pago","A Pagar","Cartao"] : ["Itaú (PIX)","Bradesco (PIX)","Cartão de Crédito","Boleto","Transferência"];
   var cm = MONTHS[new Date().getMonth()];
   openModal(isM ? "Lancar Compra / NF" : "Lancar Despesa Administrativa",
     '<div class="form-row" style="margin-bottom:12px">'
@@ -4658,7 +4698,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 21 - RECEBIMENTO OK</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 22 - FILTRO PGTO + IMPRIMIR</div>
   </div>
 </div>
 </body></html>
