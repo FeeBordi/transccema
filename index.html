@@ -286,7 +286,7 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
           <select id="expense-cat" class="form-select" style="width:auto;padding:8px 12px;font-size:12px" onchange="renderExpenses()"></select>
           <select id="expense-payment" class="form-select" style="width:auto;padding:8px 12px;font-size:12px" onchange="renderExpenses()"></select>
         </div>
-        <button class="btn btn-g" onclick="printExpensesReport()" style="margin-right:8px">&#128424; Imprimir</button><button class="btn btn-p" id="expense-add-btn" onclick="openExpenseModal()">+ Lancar</button>
+        <button class="btn btn-g" onclick="printConsolidatedReport()" style="margin-right:8px">&#128424; Consolidado</button><button class="btn btn-g" onclick="printExpensesReport()" style="margin-right:8px">&#128424; Imprimir</button><button class="btn btn-p" id="expense-add-btn" onclick="openExpenseModal()">+ Lancar</button>
       </div>
       <div style="display:flex;gap:12px;margin-bottom:14px">
         <div class="card-sm" style="min-width:180px">
@@ -809,7 +809,7 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
           <select id="expense-cat" class="form-select" style="width:auto;padding:8px 12px;font-size:12px" onchange="renderExpenses()"></select>
           <select id="expense-payment" class="form-select" style="width:auto;padding:8px 12px;font-size:12px" onchange="renderExpenses()"></select>
         </div>
-        <button class="btn btn-g" onclick="printExpensesReport()" style="margin-right:8px">&#128424; Imprimir</button><button class="btn btn-p" id="expense-add-btn" onclick="openExpenseModal()">+ Lancar</button>
+        <button class="btn btn-g" onclick="printConsolidatedReport()" style="margin-right:8px">&#128424; Consolidado</button><button class="btn btn-g" onclick="printExpensesReport()" style="margin-right:8px">&#128424; Imprimir</button><button class="btn btn-p" id="expense-add-btn" onclick="openExpenseModal()">+ Lancar</button>
       </div>
       <div style="display:flex;gap:12px;margin-bottom:14px">
         <div class="card-sm" style="min-width:180px">
@@ -2330,6 +2330,36 @@ function buildExpenseFilters() {
   var btn = ge("expense-add-btn"); if (btn) btn.textContent = expenseTab==="manut" ? "+ Lancar Compra/NF" : "+ Lancar Despesa Admin";
   var tn = ge("th-nf"), ts = ge("th-sup"); if(tn) tn.textContent=expenseTab==="manut"?"NF":"--"; if(ts) ts.textContent=expenseTab==="manut"?"Fornecedor":"Beneficiario";
 }
+function updateManutPayment(){
+  var t=ge("exp-manut-tipo"), ps=ge("exp-payment"); if(!t||!ps) return;
+  var opts = t.value==="Externa" ? ["Ita\u00fa (PIX)","Bradesco (PIX)","Cart\u00e3o de Cr\u00e9dito","Boleto","Transfer\u00eancia"] : ["Faturado","Pago","A Pagar","Cartao"];
+  ps.innerHTML = opts.map(function(p){return '<option>'+p+'</option>';}).join("");
+}
+function printConsolidatedReport(){
+  var fmn=gv("expense-month")||"";
+  function money(v){ return "R$ "+(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  var adm=adminExp.filter(function(e){return !fmn||e.month===fmn;}).map(function(e){return {date:e.date||"",cat:(CAT_ADM[e.category]||e.category||""),desc:e.description||e.beneficiary||"",pay:e.payment||"--",val:e.value||0};});
+  var mex=manut.filter(function(e){return e.manutTipo==="Externa"&&(!fmn||e.month===fmn);}).map(function(e){return {date:e.date||"",cat:(CAT_MAN[e.category]||e.category||""),desc:(e.supplier?e.supplier+" - ":"")+(e.description||""),pay:e.payment||"--",val:e.value||0};});
+  if(!adm.length && !mex.length){ showToast("Sem lancamentos para o consolidado",true); return; }
+  adm.sort(function(a,b){return (a.date||"").localeCompare(b.date||"");});
+  mex.sort(function(a,b){return (a.date||"").localeCompare(b.date||"");});
+  var totAdm=adm.reduce(function(s,x){return s+x.val;},0), totMex=mex.reduce(function(s,x){return s+x.val;},0);
+  var byPay={}; adm.concat(mex).forEach(function(x){ byPay[x.pay]=(byPay[x.pay]||0)+x.val; });
+  function rows(list){ return list.length ? list.map(function(x){return '<tr><td>'+x.date+'</td><td>'+x.cat+'</td><td>'+x.desc+'</td><td>'+x.pay+'</td><td style="text-align:right">'+money(x.val)+'</td></tr>';}).join('') : '<tr><td colspan="5" style="text-align:center;color:#999">Nenhum</td></tr>'; }
+  var thead='<tr><th>Data</th><th>Categoria</th><th>Descricao</th><th>Pagamento</th><th style="text-align:right">Valor</th></tr>';
+  var payRows=Object.keys(byPay).sort().map(function(pp){return '<tr><td>'+pp+'</td><td style="text-align:right">'+money(byPay[pp])+'</td></tr>';}).join('');
+  var w=window.open('','_blank'); if(!w){ showToast('Permita pop-ups para imprimir',true); return; }
+  var css='body{font-family:Arial,Helvetica,sans-serif;padding:20px;color:#111}h1{font-size:17px;margin:0 0 2px}h2{font-size:14px;margin:18px 0 6px;border-bottom:2px solid #333;padding-bottom:3px}.meta{font-size:12px;color:#555;margin-bottom:6px}table{width:100%;border-collapse:collapse;margin-bottom:4px}th,td{border:1px solid #ccc;padding:5px 7px;font-size:11px;text-align:left}th{background:#f3f3f3}.sub{font-weight:700;text-align:right;font-size:12px;margin:2px 0 6px}.tot{font-weight:800;font-size:15px;margin-top:10px;border-top:2px solid #333;padding-top:8px;text-align:right}';
+  w.document.write('<html><head><meta charset="utf-8"><title>Consolidado - TRANSCCEMA</title><style>'+css+'</style></head><body>');
+  w.document.write('<h1>TRANSCCEMA - Relatorio Consolidado</h1>');
+  w.document.write('<div class="meta">Despesas Administrativas + Manutencao Externa'+(fmn?(' | Mes: '+fmn):'')+' &nbsp;|&nbsp; Emitido em '+new Date().toLocaleString('pt-BR')+'</div>');
+  w.document.write('<h2>Administrativo</h2><table><thead>'+thead+'</thead><tbody>'+rows(adm)+'</tbody></table><div class="sub">Subtotal Administrativo: '+money(totAdm)+'</div>');
+  w.document.write('<h2>Manutencao Externa</h2><table><thead>'+thead+'</thead><tbody>'+rows(mex)+'</tbody></table><div class="sub">Subtotal Manutencao Externa: '+money(totMex)+'</div>');
+  w.document.write('<h2>Por Forma de Pagamento</h2><table><thead><tr><th>Pagamento</th><th style="text-align:right">Valor</th></tr></thead><tbody>'+payRows+'</tbody></table>');
+  w.document.write('<div class="tot">TOTAL GERAL: '+money(totAdm+totMex)+'</div>');
+  w.document.write('</body></html>'); w.document.close();
+  setTimeout(function(){ w.focus(); w.print(); }, 350);
+}
 function printCard(btn){
   var card = btn.closest('.card') || btn.closest('.card-sm'); if(!card) return;
   var clone = card.cloneNode(true);
@@ -2425,6 +2455,7 @@ function openExpenseModal() {
     + '<div class="form-row" style="margin-bottom:12px">'
     + '<div class="form-group"><label class="form-label">Categoria</label><select id="exp-cat-sel" class="form-select">' + Object.keys(cats).map(function(k){return '<option value="'+k+'">'+cats[k]+'</option>';}).join("") + '</select></div>'
     + '<div class="form-group"><label class="form-label">Valor R$ <span class="form-req">*</span></label><input id="exp-val" type="number" class="form-input" placeholder="0,00"></div></div>'
+    + (isM ? '<div class="form-group" style="margin-bottom:12px"><label class="form-label">Tipo de Manutencao</label><select id="exp-manut-tipo" class="form-select" onchange="updateManutPayment()"><option value="Interna">Interna</option><option value="Externa">Externa</option></select></div>' : '')
     + '<div class="form-group" style="margin-bottom:14px"><label class="form-label">Pagamento</label><select id="exp-payment" class="form-select">' + pays.map(function(p){return '<option>'+p+'</option>';}).join("") + '</select></div>'
     + '<div style="display:flex;justify-content:flex-end;gap:10px"><button class="btn btn-g" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="saveExpense()">Lancar</button></div>'
   );
@@ -2436,7 +2467,7 @@ function saveExpense() {
   var isM = expenseTab==="manut";
   var cats = isM?CAT_MAN:CAT_ADM;
   var entry = {id:uid(), updatedAt:Date.now(), date:gv("exp-date")||today(), month:gv("exp-month-sel")||MONTHS[new Date().getMonth()], description:desc, category:gv("exp-cat-sel")||Object.keys(cats)[0], value:val, payment:gv("exp-payment")||"--"};
-  if (isM) { entry.nfNumber=gv("exp-nf")||""; entry.supplier=gv("exp-supplier")||""; }
+  if (isM) { entry.nfNumber=gv("exp-nf")||""; entry.supplier=gv("exp-supplier")||""; entry.manutTipo=gv("exp-manut-tipo")||"Interna"; }
   else { entry.beneficiary=gv("exp-beneficiary")||""; }
   if (isM) manut.push(entry); else adminExp.push(entry);
   saveAll(); closeModal(); buildExpenseFilters(); renderExpenses(); if (currentSection==="dashboard") renderDashboard(); showToast("Lancamento registrado!");
@@ -4698,7 +4729,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 22 - FILTRO PGTO + IMPRIMIR</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 23 - MANUT EXTERNA + CONSOLIDADO</div>
   </div>
 </div>
 </body></html>
