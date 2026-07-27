@@ -161,6 +161,7 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
   <div id="content">
 
     <div id="sec-dashboard" class="section active">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:14px"><button class="btn btn-p" onclick="printCostReport()">&#128424; Relatorio de Custo</button></div>
       <div class="grid4" id="stat-cards"></div>
       <div class="flex-row" style="margin-bottom:20px">
         <div class="card" style="flex:2"><div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>Despesas Mensais 2026</span><button class="print-btn" onclick="printCard(this)" style="background:#f97316;border:none;color:#fff;font-size:11px;font-weight:600;padding:4px 10px;border-radius:5px;cursor:pointer">&#128424; Imprimir</button></div><canvas id="ch-bar" height="200"></canvas></div>
@@ -684,6 +685,7 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
   <div id="content">
 
     <div id="sec-dashboard" class="section active">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:14px"><button class="btn btn-p" onclick="printCostReport()">&#128424; Relatorio de Custo</button></div>
       <div class="grid4" id="stat-cards"></div>
       <div class="flex-row" style="margin-bottom:20px">
         <div class="card" style="flex:2"><div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>Despesas Mensais 2026</span><button class="print-btn" onclick="printCard(this)" style="background:#f97316;border:none;color:#fff;font-size:11px;font-weight:600;padding:4px 10px;border-radius:5px;cursor:pointer">&#128424; Imprimir</button></div><canvas id="ch-bar" height="200"></canvas></div>
@@ -1559,7 +1561,39 @@ function closeSeqModal() { ge("seq-modal").style.display = "none"; }
 // ============================================================
 // DASHBOARD
 // ============================================================
+var costLabels = {
+  id:'costLabels',
+  afterDatasetsDraw:function(chart){
+    var ctx=chart.ctx, type=chart.config.type;
+    if(type==='bar'){
+      var horiz = chart.options.indexAxis==='y';
+      chart.data.datasets.forEach(function(ds,di){
+        var meta=chart.getDatasetMeta(di); if(meta.hidden) return;
+        meta.data.forEach(function(el,idx){
+          var v=ds.data[idx]; if(!v) return;
+          ctx.save(); ctx.fillStyle='#e2e8f0'; ctx.font='700 10px Arial';
+          if(horiz){ ctx.textAlign='left'; ctx.textBaseline='middle'; ctx.fillText('R$'+(v/1000).toFixed(1)+'k', el.x+4, el.y); }
+          else { ctx.textAlign='center'; ctx.textBaseline='bottom'; ctx.fillText((v/1000).toFixed(1)+'k', el.x, el.y-2); }
+          ctx.restore();
+        });
+      });
+    } else if(type==='doughnut'||type==='pie'){
+      var ds=chart.data.datasets[0]; if(!ds) return;
+      var total=ds.data.reduce(function(a,b){return a+(b||0);},0); if(!total) return;
+      var meta=chart.getDatasetMeta(0);
+      meta.data.forEach(function(arc,idx){
+        var v=ds.data[idx]; if(!v) return;
+        var pct=v/total*100; if(pct<6) return;
+        var ang=(arc.startAngle+arc.endAngle)/2, r=(arc.innerRadius+arc.outerRadius)/2;
+        var x=arc.x+Math.cos(ang)*r, y=arc.y+Math.sin(ang)*r;
+        ctx.save(); ctx.fillStyle='#fff'; ctx.font='700 11px Arial'; ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText(pct.toFixed(0)+'%', x, y); ctx.restore();
+      });
+    }
+  }
+};
 function renderDashboard() {
+  if(window.Chart && !window._clReg){ try{ Chart.register(costLabels); }catch(e){} window._clReg=true; }
   var tM = manut.reduce(function(s,e){return s+e.value;},0);
   var tA = adminExp.reduce(function(s,e){return s+e.value;},0);
   var tG = tM + tA;
@@ -2357,6 +2391,58 @@ function printConsolidatedReport(){
   w.document.write('<h2>Manutencao Externa</h2><table><thead>'+thead+'</thead><tbody>'+rows(mex)+'</tbody></table><div class="sub">Subtotal Manutencao Externa: '+money(totMex)+'</div>');
   w.document.write('<h2>Por Forma de Pagamento</h2><table><thead><tr><th>Pagamento</th><th style="text-align:right">Valor</th></tr></thead><tbody>'+payRows+'</tbody></table>');
   w.document.write('<div class="tot">TOTAL GERAL: '+money(totAdm+totMex)+'</div>');
+  w.document.write('</body></html>'); w.document.close();
+  setTimeout(function(){ w.focus(); w.print(); }, 350);
+}
+function printCostReport(){
+  function money(v){ return "R$ "+(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  var tM=manut.reduce(function(s,e){return s+(e.value||0);},0);
+  var tA=adminExp.reduce(function(s,e){return s+(e.value||0);},0);
+  var tG=tM+tA;
+  var mesRows='';
+  for(var i=0;i<MONTHS.length;i++){
+    var m=MONTHS[i], mv=0, av=0;
+    manut.forEach(function(e){if(e.month===m)mv+=e.value||0;});
+    adminExp.forEach(function(e){if(e.month===m)av+=e.value||0;});
+    if(mv||av) mesRows+='<tr><td>'+m+'</td><td style="text-align:right">'+money(mv)+'</td><td style="text-align:right">'+money(av)+'</td><td style="text-align:right"><b>'+money(mv+av)+'</b></td></tr>';
+  }
+  function catRows(list, catMap){
+    var mp={}; list.forEach(function(e){var k=e.category||'outros'; mp[k]=(mp[k]||0)+(e.value||0);});
+    var arr=Object.keys(mp).map(function(k){return {n:(catMap[k]||k), v:mp[k]};}); arr.sort(function(a,b){return b.v-a.v;});
+    return arr.map(function(x){return '<tr><td>'+x.n+'</td><td style="text-align:right">'+money(x.v)+'</td></tr>';}).join('') || '<tr><td colspan="2" style="text-align:center;color:#999">Nenhum</td></tr>';
+  }
+  var supMap={}; manut.forEach(function(e){var n=e.supplier||'(sem fornecedor)'; supMap[n]=(supMap[n]||0)+(e.value||0);});
+  var supArr=Object.keys(supMap).map(function(n){return {n:n,v:supMap[n]};}); supArr.sort(function(a,b){return b.v-a.v;});
+  var supRows=supArr.map(function(x){return '<tr><td>'+x.n+'</td><td style="text-align:right">'+money(x.v)+'</td></tr>';}).join('') || '<tr><td colspan="2" style="text-align:center;color:#999">Nenhum</td></tr>';
+  function catMapForMonth(mm){ var mp={}; manut.forEach(function(e){ if(e.month===mm){ var k='Manut: '+(CAT_MAN[e.category]||e.category||'Outros'); mp[k]=(mp[k]||0)+(e.value||0); } }); adminExp.forEach(function(e){ if(e.month===mm){ var k='Adm: '+(CAT_ADM[e.category]||e.category||'Outros'); mp[k]=(mp[k]||0)+(e.value||0); } }); return mp; }
+  var monthsWithData=[]; MONTHS.forEach(function(mm){ var mv=0,av=0; manut.forEach(function(e){if(e.month===mm)mv+=e.value||0;}); adminExp.forEach(function(e){if(e.month===mm)av+=e.value||0;}); if(mv||av) monthsWithData.push({m:mm,total:mv+av}); });
+  var compRows='';
+  for(var ci=1; ci<monthsWithData.length; ci++){
+    var cur=monthsWithData[ci], prev=monthsWithData[ci-1];
+    var delta=cur.total-prev.total;
+    var pct = prev.total ? (delta/prev.total*100) : (cur.total>0?100:0);
+    var arrow = delta>0?'&#9650;':(delta<0?'&#9660;':'');
+    var cor = delta>0?'#c0392b':(delta<0?'#1e8449':'#666');
+    var txt = delta===0?'igual':(delta>0?'pior':'melhor');
+    var cmp=catMapForMonth(prev.m), cmc=catMapForMonth(cur.m), keys={};
+    Object.keys(cmp).forEach(function(k){keys[k]=1;}); Object.keys(cmc).forEach(function(k){keys[k]=1;});
+    var drv=null,drvD=0; Object.keys(keys).forEach(function(k){ var d=(cmc[k]||0)-(cmp[k]||0); if(Math.abs(d)>Math.abs(drvD)){drvD=d;drv=k;} });
+    var drvTxt = drv ? (drv+' ('+(drvD>0?'+':'')+money(drvD)+')') : '-';
+    compRows += '<tr><td>'+cur.m+' vs '+prev.m+'</td><td style="text-align:right">'+money(cur.total)+'</td><td style="text-align:right;color:'+cor+';font-weight:700">'+arrow+' '+(pct>0?'+':'')+pct.toFixed(1)+'% '+txt+'</td><td>'+drvTxt+'</td></tr>';
+  }
+  if(!compRows) compRows='<tr><td colspan="4" style="text-align:center;color:#999">Precisa de pelo menos 2 meses com dados</td></tr>';
+  var w=window.open('','_blank'); if(!w){ showToast('Permita pop-ups para imprimir',true); return; }
+  var css='body{font-family:Arial,Helvetica,sans-serif;padding:20px;color:#111}h1{font-size:18px;margin:0 0 2px}h2{font-size:14px;margin:18px 0 6px;border-bottom:2px solid #333;padding-bottom:3px}.meta{font-size:12px;color:#555;margin-bottom:8px}table{width:100%;border-collapse:collapse;margin-bottom:4px}th,td{border:1px solid #ccc;padding:5px 7px;font-size:11px;text-align:left}th{background:#f3f3f3}.cards{display:flex;gap:10px;margin-bottom:8px}.cbox{flex:1;border:1px solid #ccc;border-radius:6px;padding:8px}.cbox .l{font-size:10px;color:#666}.cbox .v{font-size:15px;font-weight:800}.tot{font-weight:800;font-size:15px;margin-top:10px;border-top:2px solid #333;padding-top:8px;text-align:right}';
+  w.document.write('<html><head><meta charset="utf-8"><title>Relatorio de Custo - TRANSCCEMA</title><style>'+css+'</style></head><body>');
+  w.document.write('<h1>TRANSCCEMA - Relatorio de Custo</h1>');
+  w.document.write('<div class="meta">Emitido em '+new Date().toLocaleString('pt-BR')+'</div>');
+  w.document.write('<div class="cards"><div class="cbox"><div class="l">Total Geral</div><div class="v">'+money(tG)+'</div></div><div class="cbox"><div class="l">Manutencao/Pecas</div><div class="v">'+money(tM)+'</div></div><div class="cbox"><div class="l">Administrativo</div><div class="v">'+money(tA)+'</div></div><div class="cbox"><div class="l">% Admin</div><div class="v">'+(tG?((tA/tG)*100).toFixed(1)+'%':'--')+'</div></div></div>');
+  w.document.write('<h2>Custo por Mes</h2><table><thead><tr><th>Mes</th><th style="text-align:right">Manutencao</th><th style="text-align:right">Administrativo</th><th style="text-align:right">Total</th></tr></thead><tbody>'+(mesRows||'<tr><td colspan="4" style="text-align:center;color:#999">Nenhum</td></tr>')+'</tbody></table>');
+  w.document.write('<h2>Comparativo Mes a Mes (melhor / pior)</h2><table><thead><tr><th>Comparacao</th><th style="text-align:right">Total do Mes</th><th style="text-align:right">Variacao</th><th>Categoria que mais puxou</th></tr></thead><tbody>'+compRows+'</tbody></table>');
+  w.document.write('<h2>Custo por Categoria - Manutencao</h2><table><thead><tr><th>Categoria</th><th style="text-align:right">Valor</th></tr></thead><tbody>'+catRows(manut,CAT_MAN)+'</tbody></table>');
+  w.document.write('<h2>Custo por Categoria - Administrativo</h2><table><thead><tr><th>Categoria</th><th style="text-align:right">Valor</th></tr></thead><tbody>'+catRows(adminExp,CAT_ADM)+'</tbody></table>');
+  w.document.write('<h2>Custo por Fornecedor</h2><table><thead><tr><th>Fornecedor</th><th style="text-align:right">Valor</th></tr></thead><tbody>'+supRows+'</tbody></table>');
+  w.document.write('<div class="tot">TOTAL GERAL: '+money(tG)+'</div>');
   w.document.write('</body></html>'); w.document.close();
   setTimeout(function(){ w.focus(); w.print(); }, 350);
 }
@@ -4729,7 +4815,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 23 - MANUT EXTERNA + CONSOLIDADO</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 25 - CUSTO COMPARATIVO</div>
   </div>
 </div>
 </body></html>
