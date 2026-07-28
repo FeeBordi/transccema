@@ -161,18 +161,18 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
   <div id="content">
 
     <div id="sec-dashboard" class="section active">
-      <div style="display:flex;justify-content:flex-end;margin-bottom:14px"><button class="btn btn-p" onclick="printCostReport()">&#128424; Relatorio de Custo</button></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px"><select id="dash-month" class="form-select" style="width:auto;padding:8px 12px;font-size:13px" onchange="renderDashboard()"></select><button class="btn btn-p" onclick="printCostReport()">&#128424; Relatorio de Custo</button></div>
       <div class="grid4" id="stat-cards"></div>
       <div class="flex-row" style="margin-bottom:20px">
-        <div class="card" style="flex:2"><div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>Despesas Mensais 2026</span><button class="print-btn" onclick="printCard(this)" style="background:#f97316;border:none;color:#fff;font-size:11px;font-weight:600;padding:4px 10px;border-radius:5px;cursor:pointer">&#128424; Imprimir</button></div><canvas id="ch-bar" height="200"></canvas></div>
-        <div class="card" style="flex:1"><div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>Categorias Admin</span><button class="print-btn" onclick="printCard(this)" style="background:#f97316;border:none;color:#fff;font-size:11px;font-weight:600;padding:4px 10px;border-radius:5px;cursor:pointer">&#128424; Imprimir</button></div><canvas id="ch-pie" height="180"></canvas><div id="pie-legend" style="margin-top:8px;display:flex;flex-direction:column;gap:4px"></div></div>
+        <div class="card" style="flex:2"><div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>Despesas Mensais 2026</span><button class="print-btn" onclick="printCard(this)" style="background:#334155;border:1px solid #475569;color:#e2e8f0;font-size:11px;font-weight:600;padding:4px 10px;border-radius:5px;cursor:pointer">&#128424; Imprimir</button></div><canvas id="ch-bar" height="200"></canvas></div>
+        <div class="card" style="flex:1"><div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>Categorias Admin</span><button class="print-btn" onclick="printCard(this)" style="background:#334155;border:1px solid #475569;color:#e2e8f0;font-size:11px;font-weight:600;padding:4px 10px;border-radius:5px;cursor:pointer">&#128424; Imprimir</button></div><canvas id="ch-pie" height="180"></canvas><div id="pie-legend" style="margin-top:8px;display:flex;flex-direction:column;gap:4px"></div></div>
       </div>
       <div class="card" style="margin-bottom:20px">
-        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>Custo por Fornecedor - Top 15</span><button class="print-btn" onclick="printCard(this)" style="background:#f97316;border:none;color:#fff;font-size:11px;font-weight:600;padding:4px 10px;border-radius:5px;cursor:pointer">&#128424; Imprimir</button></div>
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>Custo por Fornecedor - Top 15</span><button class="print-btn" onclick="printCard(this)" style="background:#334155;border:1px solid #475569;color:#e2e8f0;font-size:11px;font-weight:600;padding:4px 10px;border-radius:5px;cursor:pointer">&#128424; Imprimir</button></div>
         <div style="font-size:12px;color:var(--m2);margin-bottom:10px">Baseado nos lancamentos de Manutencao/Pecas</div>
         <canvas id="ch-sup" height="250"></canvas>
       </div>
-      <div class="card"><div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>Resumo Mensal</span><button class="print-btn" onclick="printCard(this)" style="background:#f97316;border:none;color:#fff;font-size:11px;font-weight:600;padding:4px 10px;border-radius:5px;cursor:pointer">&#128424; Imprimir</button></div>
+      <div class="card"><div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>Resumo Mensal</span><button class="print-btn" onclick="printCard(this)" style="background:#334155;border:1px solid #475569;color:#e2e8f0;font-size:11px;font-weight:600;padding:4px 10px;border-radius:5px;cursor:pointer">&#128424; Imprimir</button></div>
         <table><thead><tr><th>Mes</th><th>Manutencao</th><th>Administrativo</th><th>Total</th></tr></thead>
         <tbody id="dash-table-body"></tbody></table>
       </div>
@@ -685,18 +685,18 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
   <div id="content">
 
     <div id="sec-dashboard" class="section active">
-      <div style="display:flex;justify-content:flex-end;margin-bottom:14px"><button class="btn btn-p" onclick="printCostReport()">&#128424; Relatorio de Custo</button></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px"><select id="dash-month" class="form-select" style="width:auto;padding:8px 12px;font-size:13px" onchange="renderDashboard()"></select><button class="btn btn-p" onclick="printCostReport()">&#128424; Relatorio de Custo</button></div>
       <div class="grid4" id="stat-cards"></div>
       <div class="flex-row" style="margin-bottom:20px">
-        <div class="card" style="flex:2"><div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>Despesas Mensais 2026</span><button class="print-btn" onclick="printCard(this)" style="background:#f97316;border:none;color:#fff;font-size:11px;font-weight:600;padding:4px 10px;border-radius:5px;cursor:pointer">&#128424; Imprimir</button></div><canvas id="ch-bar" height="200"></canvas></div>
-        <div class="card" style="flex:1"><div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>Categorias Admin</span><button class="print-btn" onclick="printCard(this)" style="background:#f97316;border:none;color:#fff;font-size:11px;font-weight:600;padding:4px 10px;border-radius:5px;cursor:pointer">&#128424; Imprimir</button></div><canvas id="ch-pie" height="180"></canvas><div id="pie-legend" style="margin-top:8px;display:flex;flex-direction:column;gap:4px"></div></div>
+        <div class="card" style="flex:2"><div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>Despesas Mensais 2026</span><button class="print-btn" onclick="printCard(this)" style="background:#334155;border:1px solid #475569;color:#e2e8f0;font-size:11px;font-weight:600;padding:4px 10px;border-radius:5px;cursor:pointer">&#128424; Imprimir</button></div><canvas id="ch-bar" height="200"></canvas></div>
+        <div class="card" style="flex:1"><div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>Categorias Admin</span><button class="print-btn" onclick="printCard(this)" style="background:#334155;border:1px solid #475569;color:#e2e8f0;font-size:11px;font-weight:600;padding:4px 10px;border-radius:5px;cursor:pointer">&#128424; Imprimir</button></div><canvas id="ch-pie" height="180"></canvas><div id="pie-legend" style="margin-top:8px;display:flex;flex-direction:column;gap:4px"></div></div>
       </div>
       <div class="card" style="margin-bottom:20px">
-        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>Custo por Fornecedor - Top 15</span><button class="print-btn" onclick="printCard(this)" style="background:#f97316;border:none;color:#fff;font-size:11px;font-weight:600;padding:4px 10px;border-radius:5px;cursor:pointer">&#128424; Imprimir</button></div>
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>Custo por Fornecedor - Top 15</span><button class="print-btn" onclick="printCard(this)" style="background:#334155;border:1px solid #475569;color:#e2e8f0;font-size:11px;font-weight:600;padding:4px 10px;border-radius:5px;cursor:pointer">&#128424; Imprimir</button></div>
         <div style="font-size:12px;color:var(--m2);margin-bottom:10px">Baseado nos lancamentos de Manutencao/Pecas</div>
         <canvas id="ch-sup" height="250"></canvas>
       </div>
-      <div class="card"><div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>Resumo Mensal</span><button class="print-btn" onclick="printCard(this)" style="background:#f97316;border:none;color:#fff;font-size:11px;font-weight:600;padding:4px 10px;border-radius:5px;cursor:pointer">&#128424; Imprimir</button></div>
+      <div class="card"><div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>Resumo Mensal</span><button class="print-btn" onclick="printCard(this)" style="background:#334155;border:1px solid #475569;color:#e2e8f0;font-size:11px;font-weight:600;padding:4px 10px;border-radius:5px;cursor:pointer">&#128424; Imprimir</button></div>
         <table><thead><tr><th>Mes</th><th>Manutencao</th><th>Administrativo</th><th>Total</th></tr></thead>
         <tbody id="dash-table-body"></tbody></table>
       </div>
@@ -1571,9 +1571,10 @@ var costLabels = {
         var meta=chart.getDatasetMeta(di); if(meta.hidden) return;
         meta.data.forEach(function(el,idx){
           var v=ds.data[idx]; if(!v) return;
-          ctx.save(); ctx.fillStyle='#e2e8f0'; ctx.font='700 10px Arial';
-          if(horiz){ ctx.textAlign='left'; ctx.textBaseline='middle'; ctx.fillText('R$'+(v/1000).toFixed(1)+'k', el.x+4, el.y); }
-          else { ctx.textAlign='center'; ctx.textBaseline='bottom'; ctx.fillText((v/1000).toFixed(1)+'k', el.x, el.y-2); }
+          var _t = horiz ? ('R$'+(v/1000).toFixed(1)+'k') : ((v/1000).toFixed(1)+'k');
+          ctx.save(); ctx.font='700 10px Arial'; ctx.lineWidth=3; ctx.strokeStyle='rgba(11,25,41,0.95)'; ctx.fillStyle='#f1f5f9';
+          if(horiz){ ctx.textAlign='left'; ctx.textBaseline='middle'; ctx.strokeText(_t, el.x+4, el.y); ctx.fillText(_t, el.x+4, el.y); }
+          else { ctx.textAlign='center'; ctx.textBaseline='bottom'; ctx.strokeText(_t, el.x, el.y-2); ctx.fillText(_t, el.x, el.y-2); }
           ctx.restore();
         });
       });
@@ -1586,21 +1587,25 @@ var costLabels = {
         var pct=v/total*100; if(pct<6) return;
         var ang=(arc.startAngle+arc.endAngle)/2, r=(arc.innerRadius+arc.outerRadius)/2;
         var x=arc.x+Math.cos(ang)*r, y=arc.y+Math.sin(ang)*r;
-        ctx.save(); ctx.fillStyle='#fff'; ctx.font='700 11px Arial'; ctx.textAlign='center'; ctx.textBaseline='middle';
-        ctx.fillText(pct.toFixed(0)+'%', x, y); ctx.restore();
+        ctx.save(); ctx.font='700 11px Arial'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.lineWidth=3; ctx.strokeStyle='rgba(0,0,0,0.55)'; ctx.strokeText(pct.toFixed(0)+'%', x, y); ctx.fillStyle='#fff'; ctx.fillText(pct.toFixed(0)+'%', x, y); ctx.restore();
       });
     }
   }
 };
 function renderDashboard() {
   if(window.Chart && !window._clReg){ try{ Chart.register(costLabels); }catch(e){} window._clReg=true; }
-  var tM = manut.reduce(function(s,e){return s+e.value;},0);
-  var tA = adminExp.reduce(function(s,e){return s+e.value;},0);
+  var _dm = ge("dash-month");
+  if(_dm && !_dm.dataset.built){ _dm.innerHTML='<option value="">Todos os meses</option>'+MONTHS.map(function(m){return '<option value="'+m+'">'+m+'</option>';}).join(''); _dm.dataset.built="1"; }
+  var fMes = _dm ? _dm.value : "";
+  var manutF = fMes ? manut.filter(function(e){return e.month===fMes;}) : manut;
+  var adminF = fMes ? adminExp.filter(function(e){return e.month===fMes;}) : adminExp;
+  var tM = manutF.reduce(function(s,e){return s+(e.value||0);},0);
+  var tA = adminF.reduce(function(s,e){return s+(e.value||0);},0);
   var tG = tM + tA;
 
   // Stat cards
   var statData = [
-    {label:"Total Geral 2026", value:fmtR(tG), sub:"Jan-Jun", color:"var(--acc)", icon:"&#128176;"},
+    {label:"Total Geral 2026", value:fmtR(tG), sub:(fMes||"Jan-Jun"), color:"var(--acc)", icon:"&#128176;"},
     {label:"Manutencao/Pecas", value:fmtR(tM), sub:"compras e servicos", color:"var(--blu)", icon:"&#128295;"},
     {label:"Despesas Admin",   value:fmtR(tA), sub:"folha, FGTS, viagens", color:"var(--pur)", icon:"&#127970;"},
     {label:"% Admin/Total",    value:tG ? ((tA/tG)*100).toFixed(1)+"%" : "--", sub:"participacao", color:"var(--tea)", icon:"&#128202;"}
@@ -1651,7 +1656,7 @@ function renderDashboard() {
   var catKeys = Object.keys(CAT_ADM);
   for (var i = 0; i < catKeys.length; i++) {
     var k = catKeys[i];
-    var val = 0; adminExp.forEach(function(e){ if(e.category===k) val+=e.value; });
+    var val = 0; adminF.forEach(function(e){ if(e.category===k) val+=e.value; });
     if (val > 0) pieData.push({k:k, name:CAT_ADM[k], val:val});
   }
   pieData.sort(function(a,b){return b.val-a.val;});
@@ -1682,7 +1687,7 @@ function renderDashboard() {
 
   // Supplier cost chart
   var supMap = {};
-  manut.forEach(function(e) { var n = e.supplier||"Outros"; supMap[n] = (supMap[n]||0) + e.value; });
+  manutF.forEach(function(e) { var n = e.supplier||"Outros"; supMap[n] = (supMap[n]||0) + e.value; });
   var supArr = [];
   for (var k in supMap) supArr.push({n:k, v:supMap[k]});
   supArr.sort(function(a,b){return b.v-a.v;});
@@ -4815,7 +4820,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 25 - CUSTO COMPARATIVO</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 27 - FILTRO MES DASHBOARD</div>
   </div>
 </div>
 </body></html>
