@@ -3871,6 +3871,65 @@ function renderOSKanban() {
 }
 
 // -- MODAL DETALHE OS --
+function editarOS(id){
+  var o=null; for(var i=0;i<osData.length;i++){ if(String(osData[i].i)===String(id)){o=osData[i];break;} }
+  if(!o){ showToast("OS nao encontrada",true); return; }
+  function av(x){ return esc(String(x==null?'':x)).replace(/"/g,'&quot;'); }
+  var stOpts=[["entrada","Em Aberto"],["realizando","Em Execucao"],["realizado","Servico Realizado"]];
+  var stSel=stOpts.map(function(p){return '<option value="'+p[0]+'"'+(o.col===p[0]?' selected':'')+'>'+p[1]+'</option>';}).join('');
+  var svInputs=(o.sv||[]).map(function(s,idx){ return '<input class="form-input" id="edos-sv-'+idx+'" value="'+av(s[0])+'" style="margin-bottom:6px" placeholder="Descricao do servico">'; }).join('');
+  openModal('Editar OS #'+o.n,
+    '<div style="display:flex;flex-direction:column;gap:12px">'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+    +'<div><div class="form-label">Placa</div><input class="form-input" id="edos-placa" value="'+av(o.pl)+'" oninput="this.value=this.value.toUpperCase()"></div>'
+    +'<div><div class="form-label">Hodometro (km)</div><input class="form-input" id="edos-km" type="number" value="'+(o.ho||0)+'"></div>'
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+    +'<div><div class="form-label">Oficina / Fabricante</div><input class="form-input" id="edos-fa" value="'+av(o.fa)+'"></div>'
+    +'<div><div class="form-label">Modelo / Mecanico</div><input class="form-input" id="edos-mo" value="'+av(o.mo)+'"></div>'
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+    +'<div><div class="form-label">Data de Emissao</div><input class="form-input" id="edos-data" type="date" value="'+av(o.de)+'"></div>'
+    +'<div><div class="form-label">Status</div><select class="form-select" id="edos-status">'+stSel+'</select></div>'
+    +'</div>'
+    +'<div><div class="form-label">Servicos (apague o texto para remover uma linha)</div>'+svInputs
+    +'<input class="form-input" id="edos-sv-novo" value="" placeholder="+ Adicionar novo servico" style="margin-top:4px">'
+    +'<input type="hidden" id="edos-sv-count" value="'+(o.sv||[]).length+'"></div>'
+    +'<div style="display:flex;gap:8px">'
+    +'<button class="btn btn-ok" onclick="salvarEdicaoOS(\''+o.i+'\')" style="flex:1;justify-content:center">Salvar Alteracoes</button>'
+    +'<button class="btn btn-g" onclick="closeModal()">Cancelar</button>'
+    +'</div></div>', true);
+}
+function salvarEdicaoOS(id){
+  var o=null; for(var i=0;i<osData.length;i++){ if(String(osData[i].i)===String(id)){o=osData[i];break;} }
+  if(!o){ showToast("OS nao encontrada",true); return; }
+  var pl=(ge("edos-placa")?ge("edos-placa").value:"").trim().toUpperCase();
+  if(!pl){ showToast("Informe a placa",true); return; }
+  o.pl=pl;
+  o.ho=parseInt(ge("edos-km")?ge("edos-km").value:"0",10)||0;
+  o.fa=(ge("edos-fa")?ge("edos-fa").value:"").trim();
+  o.mo=(ge("edos-mo")?ge("edos-mo").value:"").trim();
+  if(ge("edos-data")&&ge("edos-data").value) o.de=ge("edos-data").value;
+  var col=ge("edos-status")?ge("edos-status").value:o.col;
+  var STMAP={entrada:"Em Aberto",realizando:"Em Execucao",realizado:"Servico Realizado"};
+  o.col=col; o.st=STMAP[col]||o.st;
+  var cnt=parseInt(ge("edos-sv-count")?ge("edos-sv-count").value:"0",10)||0;
+  var novoSv=[];
+  for(var k=0;k<cnt;k++){
+    var el=ge("edos-sv-"+k); var orig=(o.sv&&o.sv[k])?o.sv[k]:["","Interna","","",1];
+    if(!el){ novoSv.push(orig); continue; }
+    var t=el.value.trim(); if(!t) continue;
+    var ns=orig.slice(); ns[0]=t; novoSv.push(ns);
+  }
+  var novoEl=ge("edos-sv-novo"); if(novoEl&&novoEl.value.trim()){ novoSv.push([novoEl.value.trim(),(o.ti===2?"Externa":"Interna"),"","",(o.ti||1)]); }
+  if(novoSv.length) o.sv=novoSv;
+  o.updatedAt=Date.now();
+  try{ localStorage.setItem("tc_os_data", JSON.stringify(osData)); }catch(e){}
+  saveAll();
+  closeModal();
+  showToast("OS "+o.n+" atualizada!");
+  renderOSView();
+}
 function abrirOS(id) {
   var o=null;
   for(var i=0;i<osData.length;i++){if(String(osData[i].i)===String(id)){o=osData[i];break;}}
@@ -3920,6 +3979,7 @@ function abrirOS(id) {
     +'<div><div style="font-size:14px;font-weight:700;margin-bottom:10px">&#128295; Servicos ('+o.sv.length+')</div><div style="max-height:260px;overflow-y:auto">'+svcsHtml+'</div></div>'
     +(rel.length>0?'<div><div style="font-size:13px;font-weight:700;margin-bottom:8px;color:var(--m2)">Outras OS desta placa:</div><div style="display:flex;flex-direction:column;gap:4px">'+relHtml+'</div></div>':'')
     +'<div style="display:flex;gap:8px">'
+    +'<button class="btn btn-ok" onclick="editarOS(\''+o.i+'\')" style="flex:1;justify-content:center">&#9998; Editar</button>'
     +'<button class="btn btn-p" onclick="closeModal();filtrarPorPlaca(\'"+ esc(o.pl) +"\')" style="flex:1;justify-content:center">Ver todas OS da '+esc(o.pl)+'</button>'
     +'<button class="btn btn-g" onclick="closeModal()">Fechar</button>'
     +'</div></div>',true
@@ -4820,7 +4880,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 27 - FILTRO MES DASHBOARD</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 28 - EDITAR OS</div>
   </div>
 </div>
 </body></html>
