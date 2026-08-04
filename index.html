@@ -1601,11 +1601,13 @@ function renderDashboard() {
   var adminF = fMes ? adminExp.filter(function(e){return e.month===fMes;}) : adminExp;
   var tM = manutF.reduce(function(s,e){return s+(e.value||0);},0);
   var tA = adminF.reduce(function(s,e){return s+(e.value||0);},0);
+  var _lastIdx = new Date().getMonth();
+  for (var _mi=0; _mi<12; _mi++){ var _mm=MONTHS[_mi]; if((_mi>_lastIdx) && (manut.some(function(e){return e.month===_mm;})||adminExp.some(function(e){return e.month===_mm;}))) _lastIdx=_mi; }
   var tG = tM + tA;
 
   // Stat cards
   var statData = [
-    {label:"Total Geral 2026", value:fmtR(tG), sub:(fMes||"Jan-Jun"), color:"var(--acc)", icon:"&#128176;"},
+    {label:"Total Geral 2026", value:fmtR(tG), sub:(fMes||("Jan-"+MONTHS[_lastIdx].slice(0,3))), color:"var(--acc)", icon:"&#128176;"},
     {label:"Manutencao/Pecas", value:fmtR(tM), sub:"compras e servicos", color:"var(--blu)", icon:"&#128295;"},
     {label:"Despesas Admin",   value:fmtR(tA), sub:"folha, FGTS, viagens", color:"var(--pur)", icon:"&#127970;"},
     {label:"% Admin/Total",    value:tG ? ((tA/tG)*100).toFixed(1)+"%" : "--", sub:"participacao", color:"var(--tea)", icon:"&#128202;"}
@@ -1625,7 +1627,7 @@ function renderDashboard() {
   var labels = [];
   var mVals = [];
   var aVals = [];
-  for (var i = 0; i < 6; i++) {
+  for (var i = 0; i <= _lastIdx; i++) {
     var m = MONTHS[i];
     labels.push(m.slice(0,3));
     var mv = 0; manut.forEach(function(e){ if(e.month===m) mv+=e.value; });
@@ -1713,7 +1715,7 @@ function renderDashboard() {
 
   // Summary table
   var tableHtml = "";
-  for (var i = 0; i < 6; i++) {
+  for (var i = 0; i <= _lastIdx; i++) {
     var t = mVals[i] + aVals[i];
     tableHtml += '<tr><td>' + MONTHS[i] + '</td>'
       + '<td style="color:var(--blu);font-weight:700">' + (mVals[i] ? fmtR(mVals[i]) : "--") + '</td>'
@@ -4880,7 +4882,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 28 - EDITAR OS</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 29 - GRAFICO ATE MES ATUAL</div>
   </div>
 </div>
 </body></html>
