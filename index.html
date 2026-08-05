@@ -2893,8 +2893,13 @@ function manualSync() {
       return;
     }
     var t = new Date().toLocaleTimeString("pt-BR");
-    setSyncStatus("var(--grn)", "Sheets " + t);
-    showToast("Google Sheets atualizado com sucesso!");
+    setSyncStatus("var(--yel)", "Buscando novos dados...");
+    pullFromServer(function(pok, pmsg) {
+      var t2 = new Date().toLocaleTimeString("pt-BR");
+      setSyncStatus("var(--grn)", "Sheets " + t2);
+      if (pok && pmsg === "novos_dados") { showToast("Sincronizado! Novos dados recebidos."); refreshCurrentSection(); }
+      else { showToast("Google Sheets sincronizado!"); }
+    });
   });
 }
 function startAutoSync() {
@@ -4882,7 +4887,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 29 - GRAFICO ATE MES ATUAL</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 30 - SYNC 2 VIAS</div>
   </div>
 </div>
 </body></html>
