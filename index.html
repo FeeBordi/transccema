@@ -1094,6 +1094,7 @@ var CC_MAN = {manutencao:"#f97316",pecas:"#3b82f6",servico:"#f59e0b",acidente:"#
 var CC_ADM = {folha:"#6366f1",ferias:"#ec4899",fgts:"#f59e0b",impostos:"#ef4444",honorarios:"#8b5cf6",adiantamento:"#06b6d4",adiant_sal:"#14b8a6",borracharia:"#f97316",vale:"#10b981",descarga:"#84cc16",outros:"#94a3b8"};
 var CAT_UNI={}; (function(){ for(var k in CAT_ADM) CAT_UNI[k]=CAT_ADM[k]; for(var k2 in CAT_MAN) if(!(k2 in CAT_UNI)) CAT_UNI[k2]=CAT_MAN[k2]; })();
 var CC_UNI={}; (function(){ for(var k in CC_ADM) CC_UNI[k]=CC_ADM[k]; for(var k2 in CC_MAN) if(!(k2 in CC_UNI)) CC_UNI[k2]=CC_MAN[k2]; })();
+var PAY_UNI = ["Itaú (PIX)","Bradesco (PIX)","Banco XP (PIX)","Cartão de Crédito","Cartão Banco XP","Boleto","Transferência"];
 var URG_COLORS = {alta:"var(--red)",media:"var(--yel)",baixa:"var(--grn)"};
 var KANBAN_COLS = [
   {k:"pedido",   lb:"Pedido de Compra",    c:"var(--yel)",bg:"rgba(245,158,11,.08)",br:"rgba(245,158,11,.3)"},
@@ -2518,7 +2519,7 @@ function renderExpenses() {
       + '<td><span style="background:' + ecol + '18;color:' + ecol + ';border:1px solid ' + ecol + '44;font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600">' + ecn + '</span></td>'
       + '<td style="color:var(--pur);font-weight:700;white-space:nowrap">' + fmtR(e.value) + '</td>'
       + '<td><span class="badge ' + pb + '">' + esc(e.payment||"--") + '</span></td>'
-      + '<td><button class="delbtn" onclick="deleteExpense(\'' + e.id + '\')">&#128465;</button></td></tr>';
+      + '<td style="white-space:nowrap"><button class="delbtn" onclick="editExpense(\'' + e.id + '\')" style="margin-right:4px">&#9998;</button><button class="delbtn" onclick="deleteExpense(\'' + e.id + '\')">&#128465;</button></td></tr>';
   }
   var tbl = ge("expense-table-body");
   if (tbl) tbl.innerHTML = tblHtml || '<tr><td colspan="9" style="text-align:center;padding:30px;color:var(--mu)">Nenhum lancamento.</td></tr>';
@@ -2531,9 +2532,55 @@ function deleteExpense(id) {
   saveAll(); renderExpenses(); buildExpenseFilters(); if (currentSection==="dashboard") renderDashboard();
   showToast("Lancamento excluido.");
 }
+function editExpense(id){
+  var o=null; for(var i=0;i<adminExp.length;i++){ if(adminExp[i].id===id){o=adminExp[i];break;} }
+  if(!o){ for(var j=0;j<manut.length;j++){ if(manut[j].id===id){o=manut[j];break;} } }
+  if(!o){ showToast("Lancamento nao encontrado",true); return; }
+  function av(x){ return esc(String(x==null?'':x)).replace(/"/g,'&quot;'); }
+  var cats=CAT_UNI;
+  var catOpts=Object.keys(cats).map(function(k){return '<option value="'+k+'"'+(o.category===k?' selected':'')+'>'+cats[k]+'</option>';}).join("");
+  var payList=PAY_UNI.slice(); if(o.payment && payList.indexOf(o.payment)<0) payList.unshift(o.payment);
+  var payOpts=payList.map(function(p){return '<option'+(o.payment===p?' selected':'')+'>'+p+'</option>';}).join("");
+  var monOpts=MONTHS.map(function(m){return '<option value="'+m+'"'+(o.month===m?' selected':'')+'>'+m+'</option>';}).join("");
+  var favBen = (o.supplier!==undefined && o.supplier!==null && o.supplier!=="") ? o.supplier : (o.beneficiary||"");
+  openModal("Editar Despesa",
+    '<div class="form-row" style="margin-bottom:12px">'
+    + '<div class="form-group"><label class="form-label">Data</label><input id="edx-date" type="date" class="form-input" value="'+av(o.date)+'"></div>'
+    + '<div class="form-group"><label class="form-label">Mes</label><select id="edx-month" class="form-select">'+monOpts+'</select></div></div>'
+    + '<div class="form-row" style="margin-bottom:12px"><div class="form-group"><label class="form-label">Nr NF (opcional)</label><input id="edx-nf" class="form-input" value="'+av(o.nfNumber)+'"></div><div class="form-group" style="flex:2"><label class="form-label">Fornecedor / Beneficiario</label><input id="edx-ben" class="form-input" value="'+av(favBen)+'"></div></div>'
+    + '<div class="form-group" style="margin-bottom:12px"><label class="form-label">Descricao</label><textarea id="edx-desc" class="form-textarea" rows="2">'+esc(o.description||"")+'</textarea></div>'
+    + '<div class="form-row" style="margin-bottom:12px">'
+    + '<div class="form-group"><label class="form-label">Categoria</label><select id="edx-cat" class="form-select">'+catOpts+'</select></div>'
+    + '<div class="form-group"><label class="form-label">Valor R$</label><input id="edx-val" type="number" class="form-input" value="'+(o.value||0)+'"></div></div>'
+    + '<div class="form-group" style="margin-bottom:14px"><label class="form-label">Pagamento</label><select id="edx-payment" class="form-select">'+payOpts+'</select></div>'
+    + '<div style="display:flex;justify-content:flex-end;gap:10px"><button class="btn btn-g" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="salvarEdicaoDespesa(\''+id+'\')">Salvar Alteracoes</button></div>'
+  );
+}
+function salvarEdicaoDespesa(id){
+  var o=null, arr=null;
+  for(var i=0;i<adminExp.length;i++){ if(adminExp[i].id===id){o=adminExp[i];arr="admin";break;} }
+  if(!o){ for(var j=0;j<manut.length;j++){ if(manut[j].id===id){o=manut[j];arr="manut";break;} } }
+  if(!o){ showToast("Lancamento nao encontrado",true); return; }
+  var val=parseFloat(gv("edx-val")||"0");
+  if(!val||val<=0){ showToast("Valor invalido",true); return; }
+  var desc=(gv("edx-desc")||"").trim();
+  if(!desc){ showToast("Descricao obrigatoria",true); return; }
+  o.date=gv("edx-date")||o.date;
+  o.month=gv("edx-month")||o.month;
+  o.description=desc;
+  o.category=gv("edx-cat")||o.category;
+  o.value=val;
+  o.payment=gv("edx-payment")||o.payment;
+  var nf=(gv("edx-nf")||"").trim(); if(nf) o.nfNumber=nf; else if(o.nfNumber!==undefined) o.nfNumber="";
+  var ben=(gv("edx-ben")||"").trim();
+  if(o.supplier!==undefined && o.supplier!==null && o.supplier!=="") o.supplier=ben; else o.beneficiary=ben;
+  o.updatedAt=(typeof bumpTs==="function")?bumpTs(o):Date.now();
+  saveAll(); closeModal(); buildExpenseFilters(); renderExpenses(); if (currentSection==="dashboard") renderDashboard();
+  showToast("Despesa atualizada!");
+}
 function openExpenseModal() {
   var cats = CAT_UNI;
-  var pays = ["Itaú (PIX)","Bradesco (PIX)","Cartão de Crédito","Boleto","Transferência"];
+  var pays = PAY_UNI;
   var cm = MONTHS[new Date().getMonth()];
   openModal("Lancar Despesa",
     '<div class="form-row" style="margin-bottom:12px">'
@@ -4880,7 +4927,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 31 - DESPESAS UNIFICADAS</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 32 - EDITAR DESPESA + XP</div>
   </div>
 </div>
 </body></html>
