@@ -1092,6 +1092,8 @@ var CAT_MAN = {manutencao:"Manutencao/Servicos",pecas:"Pecas",servico:"Servico",
 var CAT_ADM = {folha:"Folha de Pagamento",ferias:"Ferias/Rescisao",fgts:"FGTS/Encargos",impostos:"ICMS/Impostos",honorarios:"Honorarios",adiantamento:"Adiantamento Viagem",adiant_sal:"Adiantamento Salario",borracharia:"Servicos de Borracharia",vale:"Vale/Beneficios",descarga:"Descarga/Operacao",outros:"Outros Admin"};
 var CC_MAN = {manutencao:"#f97316",pecas:"#3b82f6",servico:"#f59e0b",acidente:"#ef4444",lubrificantes:"#14b8a6",borracharia:"#06b6d4",outros:"#8b5cf6"};
 var CC_ADM = {folha:"#6366f1",ferias:"#ec4899",fgts:"#f59e0b",impostos:"#ef4444",honorarios:"#8b5cf6",adiantamento:"#06b6d4",adiant_sal:"#14b8a6",borracharia:"#f97316",vale:"#10b981",descarga:"#84cc16",outros:"#94a3b8"};
+var CAT_UNI={}; (function(){ for(var k in CAT_ADM) CAT_UNI[k]=CAT_ADM[k]; for(var k2 in CAT_MAN) if(!(k2 in CAT_UNI)) CAT_UNI[k2]=CAT_MAN[k2]; })();
+var CC_UNI={}; (function(){ for(var k in CC_ADM) CC_UNI[k]=CC_ADM[k]; for(var k2 in CC_MAN) if(!(k2 in CC_UNI)) CC_UNI[k2]=CC_MAN[k2]; })();
 var URG_COLORS = {alta:"var(--red)",media:"var(--yel)",baixa:"var(--grn)"};
 var KANBAN_COLS = [
   {k:"pedido",   lb:"Pedido de Compra",    c:"var(--yel)",bg:"rgba(245,158,11,.08)",br:"rgba(245,158,11,.3)"},
@@ -2343,18 +2345,13 @@ function toggleSupplierActive(id) { suppliers = suppliers.map(function(s){ retur
 // EXPENSES
 // ============================================================
 function buildExpenseTabs() {
-  ge("expense-tabs").innerHTML = [
-    {k:"manut",lb:"Manutencao/Pecas",c:"var(--blu)"},
-    {k:"admin",lb:"Administrativas",c:"var(--pur)"}
-  ].map(function(t){
-    return '<button class="tab-btn' + (expenseTab===t.k?" active":"") + '" style="' + (expenseTab===t.k?"color:"+t.c:"") + '" onclick="switchExpTab(\'' + t.k + '\')">' + t.lb + '</button>';
-  }).join("");
+  var et=ge("expense-tabs"); if(et) et.innerHTML="";
 }
 function switchExpTab(t) { expenseTab = t; buildExpenseTabs(); buildExpenseFilters(); renderExpenses(); }
 function buildExpenseFilters() {
   buildExpenseTabs();
-  var data = expenseTab==="manut" ? manut : adminExp;
-  var cats = expenseTab==="manut" ? CAT_MAN : CAT_ADM;
+  var data = (adminExp||[]).concat(manut||[]).filter(function(e){return !e.deleted;});
+  var cats = CAT_UNI;
   var months = [];
   data.forEach(function(e){ if(months.indexOf(e.month)<0) months.push(e.month); });
   var em = ge("expense-month"), ec = ge("expense-cat");
@@ -2368,8 +2365,8 @@ function buildExpenseFilters() {
     pgs.sort();
     ep.innerHTML = '<option value="">Todos pagamentos</option>' + pgs.map(function(pv){return '<option value="'+pv+'"'+(cp===pv?" selected":"")+'>'+pv+'</option>';}).join("");
   }
-  var btn = ge("expense-add-btn"); if (btn) btn.textContent = expenseTab==="manut" ? "+ Lancar Compra/NF" : "+ Lancar Despesa Admin";
-  var tn = ge("th-nf"), ts = ge("th-sup"); if(tn) tn.textContent=expenseTab==="manut"?"NF":"--"; if(ts) ts.textContent=expenseTab==="manut"?"Fornecedor":"Beneficiario";
+  var btn = ge("expense-add-btn"); if (btn) btn.textContent = "+ Lancar Despesa";
+  var tn = ge("th-nf"), ts = ge("th-sup"); if(tn) tn.textContent="NF"; if(ts) ts.textContent="Fornec./Benef.";
 }
 function updateManutPayment(){
   var t=ge("exp-manut-tipo"), ps=ge("exp-payment"); if(!t||!ps) return;
@@ -2471,7 +2468,7 @@ function printExpensesReport(){
   var tbl=ge("expense-table-body");
   var total=ge("expense-total")?ge("expense-total").textContent:"";
   var count=ge("expense-count")?ge("expense-count").textContent:"";
-  var tab=expenseTab==="manut"?"Compras / NF (Manutencao)":"Despesas Administrativas";
+  var tab="Despesas (Administrativas + Manutencao/Pecas)";
   var fpay=gv("expense-payment")||"Todos", fmn=gv("expense-month")||"Todos", fca=gv("expense-cat")||"Todas";
   var head='<tr><th>Data</th><th>Mes</th><th>NF</th><th>Benef./Fornecedor</th><th>Descricao</th><th>Categoria</th><th>Valor</th><th>Pgto</th></tr>';
   var body='', trs=tbl?tbl.querySelectorAll('tr'):[];
@@ -2484,9 +2481,9 @@ function printExpensesReport(){
   setTimeout(function(){ w.focus(); w.print(); }, 350);
 }
 function renderExpenses() {
-  var data = expenseTab==="manut" ? manut : adminExp;
-  var cats = expenseTab==="manut" ? CAT_MAN : CAT_ADM;
-  var cc = expenseTab==="manut" ? CC_MAN : CC_ADM;
+  var data = (adminExp||[]).concat(manut||[]);
+  var cats = CAT_UNI;
+  var cc = CC_UNI;
   var q = (gv("expense-search")||"").toLowerCase(), fm = gv("expense-month")||"", fc = gv("expense-cat")||"";
   var fp = gv("expense-periodo")||""; var fpay = gv("expense-payment")||"";
   var filtered = data.filter(function(e){
@@ -2497,7 +2494,7 @@ function renderExpenses() {
       && dentroDoPeriodo(e.date, fp);
   });
   var tot = filtered.reduce(function(s,e){return s+e.value;},0);
-  var et = ge("expense-total"); if(et){ et.textContent=fmtR(tot); et.style.color=expenseTab==="manut"?"var(--blu)":"var(--pur)"; }
+  var et = ge("expense-total"); if(et){ et.textContent=fmtR(tot); et.style.color="var(--pur)"; }
   var ec2 = ge("expense-count"); if(ec2) ec2.textContent = filtered.length + " lancamentos";
   var byCatHtml = "";
   var catKeys = Object.keys(cats);
@@ -2507,7 +2504,7 @@ function renderExpenses() {
     if (v) byCatHtml += '<div style="display:flex;align-items:center;gap:5px;font-size:12px"><div style="width:7px;height:7px;border-radius:50%;background:' + (cc[k]||"#8b5cf6") + '"></div><span style="color:var(--m2)">' + cats[k] + ':</span><span style="font-weight:700">' + fmtR(v) + '</span></div>';
   }
   var ebc = ge("expense-by-cat"); if(ebc) ebc.innerHTML = byCatHtml;
-  var isM = expenseTab === "manut";
+  var isM = false;
   var tblHtml = "";
   var rows = filtered.slice().sort(function(a,b){ return (b.date||"").localeCompare(a.date||""); });
   for (var i = 0; i < rows.length; i++) {
@@ -2515,11 +2512,11 @@ function renderExpenses() {
     var ecol = cc[e.category]||"#8b5cf6", ecn = cats[e.category]||e.category||"--";
     var pb = (e.payment&&e.payment.indexOf("PIX")>=0)?"b-te":(e.payment==="Faturado"||e.payment&&e.payment.indexOf("Transfer")>=0)?"b-bl":e.payment==="Pago"?"b-gn":"b-gr";
     tblHtml += '<tr><td style="white-space:nowrap">' + fmtD(e.date) + '</td><td>' + (e.month||"--") + '</td>'
-      + '<td>' + (isM ? esc(e.nfNumber||"--") : "--") + '</td>'
-      + '<td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(isM?(e.supplier||"--"):(e.beneficiary||"--")) + '</td>'
+      + '<td>' + esc(e.nfNumber||"--") + '</td>'
+      + '<td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(e.supplier||e.beneficiary||"--") + '</td>'
       + '<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(e.description||"--") + '</td>'
       + '<td><span style="background:' + ecol + '18;color:' + ecol + ';border:1px solid ' + ecol + '44;font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600">' + ecn + '</span></td>'
-      + '<td style="color:' + (isM?"var(--blu)":"var(--pur)") + ';font-weight:700;white-space:nowrap">' + fmtR(e.value) + '</td>'
+      + '<td style="color:var(--pur);font-weight:700;white-space:nowrap">' + fmtR(e.value) + '</td>'
       + '<td><span class="badge ' + pb + '">' + esc(e.payment||"--") + '</span></td>'
       + '<td><button class="delbtn" onclick="deleteExpense(\'' + e.id + '\')">&#128465;</button></td></tr>';
   }
@@ -2529,26 +2526,24 @@ function renderExpenses() {
 function deleteExpense(id) {
   if (!confirm("Deseja excluir este lancamento? Esta acao nao pode ser desfeita.")) return;
   var marcar = function(e){ return e.id===id ? Object.assign({}, e, {deleted:true, updatedAt:bumpTs(e)}) : e; };
-  if (expenseTab==="manut") manut = manut.map(marcar);
-  else adminExp = adminExp.map(marcar);
+  if (adminExp.some(function(e){return e.id===id;})) adminExp = adminExp.map(marcar);
+  else manut = manut.map(marcar);
   saveAll(); renderExpenses(); buildExpenseFilters(); if (currentSection==="dashboard") renderDashboard();
   showToast("Lancamento excluido.");
 }
 function openExpenseModal() {
-  var isM = expenseTab==="manut", cats = isM?CAT_MAN:CAT_ADM;
-  var pays = isM ? ["Faturado","Pago","A Pagar","Cartao"] : ["Itaú (PIX)","Bradesco (PIX)","Cartão de Crédito","Boleto","Transferência"];
+  var cats = CAT_UNI;
+  var pays = ["Itaú (PIX)","Bradesco (PIX)","Cartão de Crédito","Boleto","Transferência"];
   var cm = MONTHS[new Date().getMonth()];
-  openModal(isM ? "Lancar Compra / NF" : "Lancar Despesa Administrativa",
+  openModal("Lancar Despesa",
     '<div class="form-row" style="margin-bottom:12px">'
     + '<div class="form-group"><label class="form-label">Data <span class="form-req">*</span></label><input id="exp-date" type="date" class="form-input" value="' + today() + '"></div>'
     + '<div class="form-group"><label class="form-label">Mes</label><select id="exp-month-sel" class="form-select">' + MONTHS.map(function(m){return '<option value="'+m+'"'+(m===cm?" selected":"")+'>'+m+'</option>';}).join("") + '</select></div></div>'
-    + (isM ? '<div class="form-row" style="margin-bottom:12px"><div class="form-group"><label class="form-label">Nr NF</label><input id="exp-nf" class="form-input" placeholder="123456"></div><div class="form-group" style="flex:2"><label class="form-label">Fornecedor</label><input id="exp-supplier" class="form-input"></div></div>'
-           : '<div class="form-group" style="margin-bottom:12px"><label class="form-label">Beneficiario</label><input id="exp-beneficiary" class="form-input" placeholder="Ex: Colaboradores, SEFAZ"></div>')
-    + '<div class="form-group" style="margin-bottom:12px"><label class="form-label">Descricao <span class="form-req">*</span></label><textarea id="exp-desc" class="form-textarea" rows="2"></textarea></div>'
+    + '<div class="form-row" style="margin-bottom:12px"><div class="form-group"><label class="form-label">Nr NF (opcional)</label><input id="exp-nf" class="form-input" placeholder="123456"></div><div class="form-group" style="flex:2"><label class="form-label">Fornecedor / Beneficiario</label><input id="exp-beneficiary" class="form-input" placeholder="Ex: Colaboradores, SEFAZ, Oficina"></div></div>'
+    + '<div class="form-group" style="margin-bottom:12px"><label class="form-label">Descricao <span class="form-req">*</span></label><textarea id="exp-desc" class="form-textarea" rows="2" placeholder="Ex: Pecas - troca de filtros / Manutencao - ..."></textarea></div>'
     + '<div class="form-row" style="margin-bottom:12px">'
     + '<div class="form-group"><label class="form-label">Categoria</label><select id="exp-cat-sel" class="form-select">' + Object.keys(cats).map(function(k){return '<option value="'+k+'">'+cats[k]+'</option>';}).join("") + '</select></div>'
     + '<div class="form-group"><label class="form-label">Valor R$ <span class="form-req">*</span></label><input id="exp-val" type="number" class="form-input" placeholder="0,00"></div></div>'
-    + (isM ? '<div class="form-group" style="margin-bottom:12px"><label class="form-label">Tipo de Manutencao</label><select id="exp-manut-tipo" class="form-select" onchange="updateManutPayment()"><option value="Interna">Interna</option><option value="Externa">Externa</option></select></div>' : '')
     + '<div class="form-group" style="margin-bottom:14px"><label class="form-label">Pagamento</label><select id="exp-payment" class="form-select">' + pays.map(function(p){return '<option>'+p+'</option>';}).join("") + '</select></div>'
     + '<div style="display:flex;justify-content:flex-end;gap:10px"><button class="btn btn-g" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="saveExpense()">Lancar</button></div>'
   );
@@ -2557,12 +2552,10 @@ function saveExpense() {
   var desc = (gv("exp-desc")||"").trim(), val = parseFloat(gv("exp-val")||"0");
   if (!desc) { showToast("Descricao obrigatoria", true); return; }
   if (!val||val<=0) { showToast("Valor invalido", true); return; }
-  var isM = expenseTab==="manut";
-  var cats = isM?CAT_MAN:CAT_ADM;
-  var entry = {id:uid(), updatedAt:Date.now(), date:gv("exp-date")||today(), month:gv("exp-month-sel")||MONTHS[new Date().getMonth()], description:desc, category:gv("exp-cat-sel")||Object.keys(cats)[0], value:val, payment:gv("exp-payment")||"--"};
-  if (isM) { entry.nfNumber=gv("exp-nf")||""; entry.supplier=gv("exp-supplier")||""; entry.manutTipo=gv("exp-manut-tipo")||"Interna"; }
-  else { entry.beneficiary=gv("exp-beneficiary")||""; }
-  if (isM) manut.push(entry); else adminExp.push(entry);
+  var entry = {id:uid(), updatedAt:Date.now(), date:gv("exp-date")||today(), month:gv("exp-month-sel")||MONTHS[new Date().getMonth()], description:desc, category:gv("exp-cat-sel")||Object.keys(CAT_UNI)[0], value:val, payment:gv("exp-payment")||"--"};
+  entry.beneficiary=gv("exp-beneficiary")||"";
+  var nf=gv("exp-nf")||""; if(nf) entry.nfNumber=nf;
+  adminExp.push(entry);
   saveAll(); closeModal(); buildExpenseFilters(); renderExpenses(); if (currentSection==="dashboard") renderDashboard(); showToast("Lancamento registrado!");
 }
 
@@ -4887,7 +4880,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 30 - SYNC 2 VIAS</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 31 - DESPESAS UNIFICADAS</div>
   </div>
 </div>
 </body></html>
