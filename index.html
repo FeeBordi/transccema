@@ -416,7 +416,7 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
           <div style="display:flex;gap:8px">
           <button class="btn btn-g" onclick="exportarInventarioCSV()" title="Exportar Excel">&#128196; Excel</button>
           <button class="btn btn-g" onclick="imprimirInventario()" title="Imprimir">&#128424; Imprimir</button>
-          <button class="btn btn-g" onclick="limparDuplicatasPreview()" style="margin-right:8px">&#129529; Limpar Duplicadas</button><button class="btn btn-p" onclick="openAlmNew()">+ Novo Item</button>
+          <button class="btn btn-g" onclick="printPartsReport()" style="margin-right:8px">&#128202; Relatorio de Pecas</button><button class="btn btn-g" onclick="limparDuplicatasPreview()" style="margin-right:8px">&#129529; Limpar Duplicadas</button><button class="btn btn-p" onclick="openAlmNew()">+ Novo Item</button>
         </div>
         </div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px" id="alm-grid"></div>
@@ -941,7 +941,7 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
           <div style="display:flex;gap:8px">
           <button class="btn btn-g" onclick="exportarInventarioCSV()" title="Exportar Excel">&#128196; Excel</button>
           <button class="btn btn-g" onclick="imprimirInventario()" title="Imprimir">&#128424; Imprimir</button>
-          <button class="btn btn-g" onclick="limparDuplicatasPreview()" style="margin-right:8px">&#129529; Limpar Duplicadas</button><button class="btn btn-p" onclick="openAlmNew()">+ Novo Item</button>
+          <button class="btn btn-g" onclick="printPartsReport()" style="margin-right:8px">&#128202; Relatorio de Pecas</button><button class="btn btn-g" onclick="limparDuplicatasPreview()" style="margin-right:8px">&#129529; Limpar Duplicadas</button><button class="btn btn-p" onclick="openAlmNew()">+ Novo Item</button>
         </div>
         </div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px" id="alm-grid"></div>
@@ -3507,6 +3507,39 @@ function saveQX(itemId) {
 }
 
 // -- NOVO ITEM --
+function printPartsReport(){
+  function money(v){ return "R$ "+(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  var custoDe={}; (almoxItems||[]).forEach(function(it){ if(it&&it.id!=null) custoDe[it.id]=parseFloat(it.custoMedio)||0; });
+  var saidas=(almoxMovs||[]).filter(function(m){return m && m.tipo==="saida";});
+  if(!saidas.length){ showToast("Nenhuma saida de peca registrada ainda",true); return; }
+  var porPeca={};
+  saidas.forEach(function(m){
+    var k=m.produto||"(sem nome)"; if(!porPeca[k]) porPeca[k]={qtd:0,n:0,custo:0};
+    var q=parseInt(m.qtd)||0; porPeca[k].qtd+=q; porPeca[k].n+=1; porPeca[k].custo+=q*(custoDe[m.itemId]||0);
+  });
+  var pecasArr=Object.keys(porPeca).map(function(k){return {nome:k,qtd:porPeca[k].qtd,n:porPeca[k].n,custo:porPeca[k].custo};});
+  pecasArr.sort(function(a,b){return b.qtd-a.qtd;});
+  var porPlaca={};
+  saidas.forEach(function(m){
+    var k=(m.placa||"(sem placa)").toString().toUpperCase(); if(!porPlaca[k]) porPlaca[k]={qtd:0,custo:0,itens:{}};
+    var q=parseInt(m.qtd)||0; porPlaca[k].qtd+=q; porPlaca[k].custo+=q*(custoDe[m.itemId]||0); porPlaca[k].itens[m.produto]=1;
+  });
+  var placaArr=Object.keys(porPlaca).map(function(k){return {placa:k,qtd:porPlaca[k].qtd,custo:porPlaca[k].custo,tipos:Object.keys(porPlaca[k].itens).length};});
+  placaArr.sort(function(a,b){return b.custo-a.custo;});
+  var topPlaca=placaArr[0];
+  var pecasRows=pecasArr.slice(0,50).map(function(p,i){return '<tr><td style="text-align:center">'+(i+1)+'</td><td>'+esc(p.nome)+'</td><td style="text-align:center"><b>'+p.qtd+'</b></td><td style="text-align:center">'+p.n+'</td><td style="text-align:right">'+money(p.custo)+'</td></tr>';}).join("");
+  var placaRows=placaArr.map(function(p,i){return '<tr><td style="text-align:center">'+(i+1)+'</td><td><b>'+esc(p.placa)+'</b></td><td style="text-align:center">'+p.tipos+'</td><td style="text-align:center">'+p.qtd+'</td><td style="text-align:right"><b>'+money(p.custo)+'</b></td></tr>';}).join("");
+  var w=window.open('','_blank'); if(!w){ showToast('Permita pop-ups para imprimir',true); return; }
+  var css='body{font-family:Arial,Helvetica,sans-serif;padding:20px;color:#111}h1{font-size:18px;margin:0 0 2px}h2{font-size:14px;margin:18px 0 6px;border-bottom:2px solid #333;padding-bottom:3px}.meta{font-size:12px;color:#555;margin-bottom:10px}table{width:100%;border-collapse:collapse;margin-bottom:4px}th,td{border:1px solid #ccc;padding:5px 7px;font-size:11px;text-align:left}th{background:#f3f3f3}.hi{background:#fff4e5;border:1px solid #f5a623;border-radius:8px;padding:10px 12px;margin-bottom:12px}.hi .l{font-size:11px;color:#666}.hi .v{font-size:17px;font-weight:800}';
+  w.document.write('<html><head><meta charset="utf-8"><title>Relatorio de Pecas - TRANSCCEMA</title><style>'+css+'</style></head><body>');
+  w.document.write('<h1>TRANSCCEMA - Relatorio de Pecas</h1>');
+  w.document.write('<div class="meta">Baseado nas saidas de estoque &nbsp;|&nbsp; '+saidas.length+' saidas &nbsp;|&nbsp; Emitido em '+new Date().toLocaleString('pt-BR')+'</div>');
+  if(topPlaca) w.document.write('<div class="hi"><div class="l">Placa que mais gastou em pecas</div><div class="v">'+esc(topPlaca.placa)+' &mdash; '+money(topPlaca.custo)+'</div></div>');
+  w.document.write('<h2>Pecas Mais Utilizadas (top 50)</h2><table><thead><tr><th style="text-align:center">#</th><th>Peca</th><th style="text-align:center">Qtd usada</th><th style="text-align:center">Nr saidas</th><th style="text-align:right">Custo total</th></tr></thead><tbody>'+pecasRows+'</tbody></table>');
+  w.document.write('<h2>Gasto por Placa (maior para menor)</h2><table><thead><tr><th style="text-align:center">#</th><th>Placa</th><th style="text-align:center">Tipos de peca</th><th style="text-align:center">Qtd pecas</th><th style="text-align:right">Custo total</th></tr></thead><tbody>'+placaRows+'</tbody></table>');
+  w.document.write('</body></html>'); w.document.close();
+  setTimeout(function(){ w.focus(); w.print(); }, 350);
+}
 function _normNome(s){ return (s||"").toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\s+/g," ").trim(); }
 function detectarDuplicatas(){
   var map={};
@@ -4987,7 +5020,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 36 - LIMPAR DUPLICADAS SEGURO</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 37 - RELATORIO DE PECAS</div>
   </div>
 </div>
 </body></html>
