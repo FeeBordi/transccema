@@ -416,7 +416,7 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
           <div style="display:flex;gap:8px">
           <button class="btn btn-g" onclick="exportarInventarioCSV()" title="Exportar Excel">&#128196; Excel</button>
           <button class="btn btn-g" onclick="imprimirInventario()" title="Imprimir">&#128424; Imprimir</button>
-          <button class="btn btn-p" onclick="openAlmNew()">+ Novo Item</button>
+          <button class="btn btn-g" onclick="limparDuplicatasPreview()" style="margin-right:8px">&#129529; Limpar Duplicadas</button><button class="btn btn-p" onclick="openAlmNew()">+ Novo Item</button>
         </div>
         </div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px" id="alm-grid"></div>
@@ -941,7 +941,7 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
           <div style="display:flex;gap:8px">
           <button class="btn btn-g" onclick="exportarInventarioCSV()" title="Exportar Excel">&#128196; Excel</button>
           <button class="btn btn-g" onclick="imprimirInventario()" title="Imprimir">&#128424; Imprimir</button>
-          <button class="btn btn-p" onclick="openAlmNew()">+ Novo Item</button>
+          <button class="btn btn-g" onclick="limparDuplicatasPreview()" style="margin-right:8px">&#129529; Limpar Duplicadas</button><button class="btn btn-p" onclick="openAlmNew()">+ Novo Item</button>
         </div>
         </div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px" id="alm-grid"></div>
@@ -3189,20 +3189,22 @@ function renderAlmox() {
   var q = (ge("alm-q") ? ge("alm-q").value : "").toLowerCase();
   var f = ge("alm-f") ? ge("alm-f").value : "all";
   var fil = almoxItems.filter(function(i) {
+    if (i.deleted) return false;
     if (q && i.produto.toLowerCase().indexOf(q) < 0) return false;
     if (f==="low"   && !(i.saldo <  i.minimo && i.minimo > 0)) return false;
     if (f==="stock" && !(i.saldo >  0))  return false;
     if (f==="zero"  && !(i.saldo <= 0))  return false;
     return true;
   });
-  var tVal  = almoxItems.reduce(function(s,i){return s+(i.valorEstoque||0);},0);
-  var tCom  = almoxItems.filter(function(i){return i.saldo>0;}).length;
-  var tLow  = almoxItems.filter(function(i){return i.saldo<i.minimo&&i.minimo>0;}).length;
+  var ativos = almoxItems.filter(function(i){return !i.deleted;});
+  var tVal  = ativos.reduce(function(s,i){return s+(i.valorEstoque||0);},0);
+  var tCom  = ativos.filter(function(i){return i.saldo>0;}).length;
+  var tLow  = ativos.filter(function(i){return i.saldo<i.minimo&&i.minimo>0;}).length;
   ge("alm-stats").innerHTML = [
     {lb:"Itens em Estoque",  v:tCom+" itens",    c:"var(--blu)",ic:"&#128201;"},
     {lb:"Valor Total",       v:R(tVal),           c:"var(--acc)",ic:"&#128176;"},
     {lb:"Abaixo do Minimo",  v:tLow+" itens",     c:tLow>0?"var(--red)":"var(--grn)",ic:"&#9888;"},
-    {lb:"Total Cadastros",   v:almoxItems.length, c:"var(--m2)", ic:"&#128203;"}
+    {lb:"Total Cadastros",   v:ativos.length, c:"var(--m2)", ic:"&#128203;"}
   ].map(function(s){
     return '<div class="stat-card"><div class="stat-icon" style="background:'+s.c+'18;font-size:20px">'+s.ic+'</div>'
       +'<div><div class="stat-lbl">'+s.lb+'</div><div class="stat-val" style="color:'+s.c+'">'+s.v+'</div></div></div>';
@@ -3505,6 +3507,61 @@ function saveQX(itemId) {
 }
 
 // -- NOVO ITEM --
+function _normNome(s){ return (s||"").toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\s+/g," ").trim(); }
+function detectarDuplicatas(){
+  var map={};
+  (almoxItems||[]).forEach(function(it){
+    if(!it || it.deleted) return;
+    var k=_normNome(it.produto);
+    if(!k) return;
+    (map[k]=map[k]||[]).push(it);
+  });
+  var grupos=[];
+  Object.keys(map).forEach(function(k){ if(map[k].length>1) grupos.push({nome:map[k][0].produto, items:map[k]}); });
+  return grupos;
+}
+function limparDuplicatasPreview(){
+  var grupos=detectarDuplicatas();
+  if(!grupos.length){ showToast("Nenhuma peca duplicada encontrada!"); return; }
+  var totalDup=grupos.reduce(function(s,g){return s+(g.items.length-1);},0);
+  var rows=grupos.map(function(g){
+    var somaSaldo=g.items.reduce(function(s,it){return s+(parseInt(it.saldo)||0);},0);
+    var parcelas=g.items.map(function(it){return (parseInt(it.saldo)||0);}).join(" + ");
+    return '<tr><td style="padding:5px 8px;border-top:1px solid var(--bd)">'+esc(g.nome)+'</td><td style="padding:5px 8px;border-top:1px solid var(--bd);text-align:center">'+g.items.length+'</td><td style="padding:5px 8px;border-top:1px solid var(--bd);text-align:center">'+parcelas+' = <b>'+somaSaldo+'</b></td></tr>';
+  }).join("");
+  openModal("Limpar Pecas Duplicadas",
+    '<div style="margin-bottom:12px;color:var(--m2);font-size:13px">Encontrei <b>'+grupos.length+'</b> peca(s) com duplicatas ('+totalDup+' registro(s) a mais). Vou juntar cada uma em um item so, <b>somando o saldo</b> &mdash; <b style="color:var(--grn)">nenhuma quantidade e perdida</b>. O nome e o custo do primeiro registro sao mantidos. Confira antes de confirmar:</div>'
+    +'<div style="max-height:340px;overflow:auto;border:1px solid var(--bd);border-radius:8px"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="position:sticky;top:0;background:var(--bg2)"><th style="text-align:left;padding:6px 8px">Peca</th><th style="padding:6px 8px">Registros</th><th style="padding:6px 8px">Saldo apos juntar</th></tr></thead><tbody>'+rows+'</tbody></table></div>'
+    +'<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px"><button class="btn btn-g" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="aplicarLimparDuplicatas()">Confirmar e Juntar</button></div>'
+  , true);
+}
+function aplicarLimparDuplicatas(){
+  var grupos=detectarDuplicatas();
+  if(!grupos.length){ closeModal(); return; }
+  var juntadas=0, removidas=0;
+  var _bt=function(x){ return (typeof bumpTs==="function")?bumpTs(x):Date.now(); };
+  grupos.forEach(function(g){
+    var primary=g.items[0];
+    var somaSaldo=g.items.reduce(function(s,it){return s+(parseInt(it.saldo)||0);},0);
+    for(var i=0;i<almoxItems.length;i++){
+      if(almoxItems[i].id===primary.id){
+        almoxItems[i].saldo=somaSaldo;
+        var custo=parseFloat(almoxItems[i].custoMedio)||0;
+        almoxItems[i].valorEstoque=somaSaldo*custo;
+        almoxItems[i].updatedAt=_bt(almoxItems[i]);
+        break;
+      }
+    }
+    for(var j=1;j<g.items.length;j++){
+      var did=g.items[j].id;
+      almoxItems=almoxItems.map(function(it){ return it.id===did ? Object.assign({},it,{deleted:true, updatedAt:_bt(it)}) : it; });
+      removidas++;
+    }
+    juntadas++;
+  });
+  saveAll(); closeModal(); renderAlmox(); if(typeof updateBadgesAlmox==="function") updateBadgesAlmox();
+  showToast(juntadas+" peca(s) juntada(s), "+removidas+" duplicata(s) removida(s)!");
+}
 function openAlmNew() {
   openModal("Cadastrar Novo Item",
     '<div class="form-group" style="margin-bottom:12px"><label class="form-label">Nome do Produto *</label>'
@@ -4930,7 +4987,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 33 - FILTRO DATA DESPESA</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 36 - LIMPAR DUPLICADAS SEGURO</div>
   </div>
 </div>
 </body></html>
