@@ -286,6 +286,7 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
           <select id="expense-month" class="form-select" style="width:auto;padding:8px 12px;font-size:12px" onchange="renderExpenses()"></select>
           <select id="expense-cat" class="form-select" style="width:auto;padding:8px 12px;font-size:12px" onchange="renderExpenses()"></select>
           <select id="expense-payment" class="form-select" style="width:auto;padding:8px 12px;font-size:12px" onchange="renderExpenses()"></select>
+          <input id="expense-date" type="date" class="form-input" style="width:auto;padding:7px 10px;font-size:12px" onchange="renderExpenses()" title="Filtrar por data especifica">
         </div>
         <button class="btn btn-g" onclick="printConsolidatedReport()" style="margin-right:8px">&#128424; Consolidado</button><button class="btn btn-g" onclick="printExpensesReport()" style="margin-right:8px">&#128424; Imprimir</button><button class="btn btn-p" id="expense-add-btn" onclick="openExpenseModal()">+ Lancar</button>
       </div>
@@ -810,6 +811,7 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
           <select id="expense-month" class="form-select" style="width:auto;padding:8px 12px;font-size:12px" onchange="renderExpenses()"></select>
           <select id="expense-cat" class="form-select" style="width:auto;padding:8px 12px;font-size:12px" onchange="renderExpenses()"></select>
           <select id="expense-payment" class="form-select" style="width:auto;padding:8px 12px;font-size:12px" onchange="renderExpenses()"></select>
+          <input id="expense-date" type="date" class="form-input" style="width:auto;padding:7px 10px;font-size:12px" onchange="renderExpenses()" title="Filtrar por data especifica">
         </div>
         <button class="btn btn-g" onclick="printConsolidatedReport()" style="margin-right:8px">&#128424; Consolidado</button><button class="btn btn-g" onclick="printExpensesReport()" style="margin-right:8px">&#128424; Imprimir</button><button class="btn btn-p" id="expense-add-btn" onclick="openExpenseModal()">+ Lancar</button>
       </div>
@@ -2486,12 +2488,13 @@ function renderExpenses() {
   var cats = CAT_UNI;
   var cc = CC_UNI;
   var q = (gv("expense-search")||"").toLowerCase(), fm = gv("expense-month")||"", fc = gv("expense-cat")||"";
-  var fp = gv("expense-periodo")||""; var fpay = gv("expense-payment")||"";
+  var fp = gv("expense-periodo")||""; var fpay = gv("expense-payment")||""; var fdate = gv("expense-date")||"";
   var filtered = data.filter(function(e){
     return !e.deleted
       && (!q || (e.description||"").toLowerCase().indexOf(q)>=0 || (e.supplier||e.beneficiary||"").toLowerCase().indexOf(q)>=0)
       && (!fm || e.month===fm) && (!fc || e.category===fc)
       && (!fpay || e.payment===fpay)
+      && (!fdate || (e.date||"").slice(0,10)===fdate)
       && dentroDoPeriodo(e.date, fp);
   });
   var tot = filtered.reduce(function(s,e){return s+e.value;},0);
@@ -4927,7 +4930,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 32 - EDITAR DESPESA + XP</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 33 - FILTRO DATA DESPESA</div>
   </div>
 </div>
 </body></html>
