@@ -2574,6 +2574,7 @@ function salvarEdicaoDespesa(id){
   showToast("Despesa atualizada!");
 }
 function openExpenseModal() {
+  window._catManual=false;
   var cats = CAT_UNI;
   var pays = PAY_UNI;
   var cm = MONTHS[new Date().getMonth()];
@@ -2582,19 +2583,56 @@ function openExpenseModal() {
     + '<div class="form-group"><label class="form-label">Data <span class="form-req">*</span></label><input id="exp-date" type="date" class="form-input" value="' + today() + '"></div>'
     + '<div class="form-group"><label class="form-label">Mes</label><select id="exp-month-sel" class="form-select">' + MONTHS.map(function(m){return '<option value="'+m+'"'+(m===cm?" selected":"")+'>'+m+'</option>';}).join("") + '</select></div></div>'
     + '<div class="form-row" style="margin-bottom:12px"><div class="form-group"><label class="form-label">Nr NF (opcional)</label><input id="exp-nf" class="form-input" placeholder="123456"></div><div class="form-group" style="flex:2"><label class="form-label">Fornecedor / Beneficiario</label><input id="exp-beneficiary" class="form-input" placeholder="Ex: Colaboradores, SEFAZ, Oficina"></div></div>'
-    + '<div class="form-group" style="margin-bottom:12px"><label class="form-label">Descricao <span class="form-req">*</span></label><textarea id="exp-desc" class="form-textarea" rows="2" placeholder="Ex: Pecas - troca de filtros / Manutencao - ..."></textarea></div>'
+    + '<div class="form-group" style="margin-bottom:12px"><label class="form-label">Descricao <span class="form-req">*</span></label><textarea id="exp-desc" class="form-textarea" rows="2" oninput="sugerirCategoria()" placeholder="Ex: Pecas - troca de filtros / Manutencao - ..."></textarea></div>'
     + '<div class="form-row" style="margin-bottom:12px">'
-    + '<div class="form-group"><label class="form-label">Categoria</label><select id="exp-cat-sel" class="form-select">' + Object.keys(cats).map(function(k){return '<option value="'+k+'">'+cats[k]+'</option>';}).join("") + '</select></div>'
+    + '<div class="form-group"><label class="form-label">Categoria</label><select id="exp-cat-sel" class="form-select" onchange="window._catManual=true">' + Object.keys(cats).map(function(k){return '<option value="'+k+'">'+cats[k]+'</option>';}).join("") + '</select><div id="cat-sugestao" style="display:none;font-size:11px;color:#38bdf8;margin-top:5px;font-weight:600"></div></div>'
     + '<div class="form-group"><label class="form-label">Valor R$ <span class="form-req">*</span></label><input id="exp-val" type="number" class="form-input" placeholder="0,00"></div></div>'
     + '<div class="form-group" style="margin-bottom:14px"><label class="form-label">Pagamento</label><select id="exp-payment" class="form-select">' + pays.map(function(p){return '<option>'+p+'</option>';}).join("") + '</select></div>'
     + '<div style="display:flex;justify-content:flex-end;gap:10px"><button class="btn btn-g" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="saveExpense()">Lancar</button></div>'
   );
 }
+var CAT_KEYWORDS = [
+  {cat:"borracharia", kw:["pneu","borrach","camara","recap","geometria","balanceamento","alinhamento"]},
+  {cat:"lubrificantes", kw:["oleo","lubrific","graxa","arla"]},
+  {cat:"pecas", kw:["peca","filtro","bomba","rolamento","lona","lampada","farol","bateria","parabrisa","reservatorio","junta","correia","mangueira","valvula","tambor","disco","pastilha","retentor","bico","turbina","radiador","cabo","sensor","coxim","amortecedor","mola","bucha","cuica","catalisador","bigode","palheta","milha","lente"]},
+  {cat:"manutencao", kw:["manutenc","revis","conserto","reparo"]},
+  {cat:"servico", kw:["mao de obra","solda","torno","retifica","oficina","servico externo","funilaria","pintura"]},
+  {cat:"acidente", kw:["acidente","sinistro","colis","batida","guincho"]},
+  {cat:"folha", kw:["salario","folha","holerite","funcionario"]},
+  {cat:"ferias", kw:["ferias","rescis"]},
+  {cat:"fgts", kw:["fgts","inss","encargo","previd"]},
+  {cat:"impostos", kw:["icms","imposto","tribut","darf","sefaz","ipva","difal"]},
+  {cat:"honorarios", kw:["honorar","contador","contabil","advog","juridic"]},
+  {cat:"adiantamento", kw:["adiantamento viagem","diaria","pedagio","adiantamento de viagem"]},
+  {cat:"adiant_sal", kw:["adiantamento salario","adiantamento de salario","vale salario"]},
+  {cat:"vale", kw:["vale transporte","vale refeic","vale aliment","cesta basica","plano de saude","beneficio"]},
+  {cat:"descarga", kw:["descarga","chapa","operacao"]}
+];
+function catSugerida(desc){
+  var d=_normNome(desc); if(!d) return null;
+  for(var i=0;i<CAT_KEYWORDS.length;i++){
+    var e=CAT_KEYWORDS[i];
+    for(var j=0;j<e.kw.length;j++){ if(d.indexOf(_normNome(e.kw[j]))>=0) return e.cat; }
+  }
+  return null;
+}
+function sugerirCategoria(){
+  var note=ge("cat-sugestao"), sel=ge("exp-cat-sel"); if(!note||!sel) return;
+  var sug=catSugerida(gv("exp-desc"));
+  if(sug && CAT_UNI[sug]){
+    if(!window._catManual) sel.value=sug;
+    note.innerHTML='&#128161; Categoria sugerida pela descricao: <b>'+CAT_UNI[sug]+'</b>'+(window._catManual?' (voce trocou manualmente)':'');
+    note.style.display='block';
+  } else { note.style.display='none'; }
+}
 function saveExpense() {
   var desc = (gv("exp-desc")||"").trim(), val = parseFloat(gv("exp-val")||"0");
   if (!desc) { showToast("Descricao obrigatoria", true); return; }
   if (!val||val<=0) { showToast("Valor invalido", true); return; }
-  var entry = {id:uid(), updatedAt:Date.now(), date:gv("exp-date")||today(), month:gv("exp-month-sel")||MONTHS[new Date().getMonth()], description:desc, category:gv("exp-cat-sel")||Object.keys(CAT_UNI)[0], value:val, payment:gv("exp-payment")||"--"};
+  var catSel = gv("exp-cat-sel")||Object.keys(CAT_UNI)[0];
+  var sug = catSugerida(desc);
+  if (sug && sug!==catSel && !confirm("A descricao parece \""+CAT_UNI[sug]+"\", mas a categoria escolhida e \""+(CAT_UNI[catSel]||catSel)+"\".\n\nLancar assim mesmo?")) return;
+  var entry = {id:uid(), updatedAt:Date.now(), date:gv("exp-date")||today(), month:gv("exp-month-sel")||MONTHS[new Date().getMonth()], description:desc, category:catSel, value:val, payment:gv("exp-payment")||"--"};
   entry.beneficiary=gv("exp-beneficiary")||"";
   var nf=gv("exp-nf")||""; if(nf) entry.nfNumber=nf;
   adminExp.push(entry);
@@ -5019,7 +5057,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 39 - LOGO TRANSCCEMA</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 40 - CATEGORIA INTELIGENTE</div>
   </div>
 </div>
 </body></html>
