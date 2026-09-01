@@ -169,7 +169,7 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
         <canvas id="ch-sup" height="250"></canvas>
       </div>
       <div class="card"><div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>Resumo Mensal</span><button class="print-btn" onclick="printCard(this)" style="background:#334155;border:1px solid #475569;color:#e2e8f0;font-size:11px;font-weight:600;padding:4px 10px;border-radius:5px;cursor:pointer">&#128424; Imprimir</button></div>
-        <table><thead><tr><th>Mes</th><th>Manutencao</th><th>Administrativo</th><th>Total</th></tr></thead>
+        <table><thead><tr><th>Mes</th><th>Manutencao</th><th>Administrativo</th><th>Combustivel</th><th>Total</th></tr></thead>
         <tbody id="dash-table-body"></tbody></table>
       </div>
     </div>
@@ -691,7 +691,7 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
         <canvas id="ch-sup" height="250"></canvas>
       </div>
       <div class="card"><div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>Resumo Mensal</span><button class="print-btn" onclick="printCard(this)" style="background:#334155;border:1px solid #475569;color:#e2e8f0;font-size:11px;font-weight:600;padding:4px 10px;border-radius:5px;cursor:pointer">&#128424; Imprimir</button></div>
-        <table><thead><tr><th>Mes</th><th>Manutencao</th><th>Administrativo</th><th>Total</th></tr></thead>
+        <table><thead><tr><th>Mes</th><th>Manutencao</th><th>Administrativo</th><th>Combustivel</th><th>Total</th></tr></thead>
         <tbody id="dash-table-body"></tbody></table>
       </div>
     </div>
@@ -1562,6 +1562,29 @@ function closeSeqModal() { ge("seq-modal").style.display = "none"; }
 // ============================================================
 // DASHBOARD
 // ============================================================
+var FUEL_URL = "https://script.google.com/macros/s/AKfycbxoDflpnOSSSYfj0eksC6Ruw0fhyImr3KOs_1QPdRrjDRzGFrXTVqw_5ocMWE2UwnV1nQ/exec";
+var fuelByMonth = {}, fuelTotal = 0, _fuelFetching = false;
+try { var _fc = localStorage.getItem("tc_fuel_cache"); if(_fc){ var _o=JSON.parse(_fc); fuelByMonth=_o.byMonth||{}; fuelTotal=_o.total||0; } } catch(e){}
+function carregarCombustivel(){
+  if(_fuelFetching) return; _fuelFetching = true;
+  fetch(FUEL_URL+"?json=1", {redirect:"follow"})
+    .then(function(r){ return r.json(); })
+    .then(function(lista){
+      var bm={}, tot=0, ano=String(new Date().getFullYear());
+      (lista||[]).forEach(function(d){
+        var dt=String(d.data||"").replace(/^'/,"").trim();
+        var m=dt.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); if(!m) return;
+        if(m[3]!==ano) return;
+        var mi=parseInt(m[2],10)-1; if(mi<0||mi>11) return;
+        var v=Number(d.valor||0)||0;
+        var nome=MONTHS[mi]; bm[nome]=(bm[nome]||0)+v; tot+=v;
+      });
+      fuelByMonth=bm; fuelTotal=tot; _fuelFetching=false;
+      try { localStorage.setItem("tc_fuel_cache", JSON.stringify({byMonth:bm,total:tot,at:Date.now()})); } catch(e){}
+      if(currentSection==="dashboard") renderDashboard();
+    })
+    .catch(function(){ _fuelFetching=false; });
+}
 var costLabels = {
   id:'costLabels',
   afterDatasetsDraw:function(chart){
@@ -1604,7 +1627,9 @@ function renderDashboard() {
   var tA = adminF.reduce(function(s,e){return s+(e.value||0);},0);
   var _lastIdx = new Date().getMonth();
   for (var _mi=0; _mi<12; _mi++){ var _mm=MONTHS[_mi]; if((_mi>_lastIdx) && (manut.some(function(e){return e.month===_mm;})||adminExp.some(function(e){return e.month===_mm;}))) _lastIdx=_mi; }
-  var tG = tM + tA;
+  if(!window._fuelFetchedSession){ window._fuelFetchedSession=true; carregarCombustivel(); }
+  var fuelCard = fMes ? (fuelByMonth[fMes]||0) : (fuelTotal||0);
+  var tG = tM + tA + fuelCard;
 
   // Stat cards
   var statData = [
@@ -1717,10 +1742,12 @@ function renderDashboard() {
   // Summary table
   var tableHtml = "";
   for (var i = 0; i <= _lastIdx; i++) {
-    var t = mVals[i] + aVals[i];
+    var fu = fuelByMonth[MONTHS[i]] || 0;
+    var t = mVals[i] + aVals[i] + fu;
     tableHtml += '<tr><td>' + MONTHS[i] + '</td>'
       + '<td style="color:var(--blu);font-weight:700">' + (mVals[i] ? fmtR(mVals[i]) : "--") + '</td>'
       + '<td style="color:var(--pur);font-weight:700">' + (aVals[i] ? fmtR(aVals[i]) : "--") + '</td>'
+      + '<td style="color:#f0a020;font-weight:700">' + (fu ? fmtR(fu) : "--") + '</td>'
       + '<td style="color:var(--acc);font-weight:700">' + (t ? fmtR(t) : "--") + '</td></tr>';
   }
   ge("dash-table-body").innerHTML = tableHtml;
@@ -5071,7 +5098,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 42 - ABA ABASTECIMENTOS</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 43 - COMBUSTIVEL NO DASHBOARD</div>
   </div>
 </div>
 </body></html>
