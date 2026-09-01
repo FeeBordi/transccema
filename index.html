@@ -3377,9 +3377,11 @@ function deleteMov(id) {
 
 // -- MODAL COMPLETO ENTRADA / SAIDA --
 function buildItemOptions() {
-  return almoxItems.map(function(i){
-    return '<option value="'+i.id+'" data-un="'+esc(i.unidade)+'">'+esc(i.produto)+'</option>';
-  }).join("");
+  return almoxItems.filter(function(i){ return !i.deleted && (i.local||"SP")===almoxLocal; })
+    .slice().sort(function(a,b){ return String(a.produto||"").localeCompare(String(b.produto||""), "pt-BR", {sensitivity:"base"}); })
+    .map(function(i){
+      return '<option value="'+i.id+'" data-un="'+esc(i.unidade)+'">'+esc(i.produto)+' ('+i.saldo+' '+esc(i.unidade||"Un")+')</option>';
+    }).join("");
 }
 function onItemChange() {
   var sel = ge("mov-item"); if (!sel) return;
@@ -3698,6 +3700,62 @@ function saveAlmNew() {
 }
 
 // -- INTEGRACAO: pedido recebido -> sugere entrada no almox --
+function _entradaAutomatica(ord, nf, val, dt){
+  var desc = String(ord.description||"").trim();
+  if(!desc){ showToast("Recebimento confirmado!"); return; }
+  // Cada linha do pedido pode ser uma peca: "Nome Ref:123=04"
+  var linhas = desc.split(/\r?\n/).map(function(x){return x.trim();}).filter(Boolean);
+  if(!linhas.length) linhas = [desc];
+  var totalQtd = 0, prep = [];
+  linhas.forEach(function(l){
+    var q = 1;
+    var m = l.match(/=\s*(\d+)\s*$/);           // "...=04"
+    if(m){ q = parseInt(m[1],10)||1; l = l.replace(/=\s*\d+\s*$/,"").trim(); }
+    if(q<=0) q = 1;
+    totalQtd += q;
+    prep.push({nome:l, qtd:q});
+  });
+  var vUnit = (val>0 && totalQtd>0) ? (val/totalQtd) : 0;
+  var entrou = 0, criados = 0;
+  prep.forEach(function(p){
+    var alvo = null, chave = _normNome(p.nome);
+    for(var i=0;i<almoxItems.length;i++){
+      var it = almoxItems[i];
+      if(it.deleted || (it.local||"SP")!==almoxLocal) continue;
+      var n = _normNome(it.produto);
+      if(n===chave || (n && chave && (n.indexOf(chave)>=0 || chave.indexOf(n)>=0))){ alvo=it; break; }
+    }
+    if(!alvo){
+      if(!confirm('A peca abaixo nao esta no estoque ('+(almoxLocal==="BA"?"Bahia":"Sao Paulo")+'):\n\n'+p.nome+'\n\nCadastrar e dar entrada de '+p.qtd+'?')) return;
+      alvo = {id:uid(), local:almoxLocal, produto:p.nome, grupo:"Pecas", unidade:"Un",
+              saldo:0, minimo:1, maximo:10, custoMedio:0, valorUlt:0, valorEstoque:0, updatedAt:Date.now()};
+      almoxItems.push(alvo); criados++;
+    }
+    var totalQ = (alvo.saldo||0) + p.qtd;
+    var novoCusto = (vUnit>0 && totalQ>0)
+        ? ((alvo.custoMedio||0)*(alvo.saldo||0) + vUnit*p.qtd)/totalQ
+        : (alvo.custoMedio||0);
+    novoCusto = Math.round(novoCusto*100)/100;
+    var aid = alvo.id;
+    almoxItems = almoxItems.map(function(it){
+      if(it.id!==aid) return it;
+      return Object.assign({}, it, {saldo:totalQ, custoMedio:novoCusto,
+        valorUlt:(vUnit>0?Math.round(vUnit*100)/100:it.valorUlt),
+        valorEstoque:Math.round(totalQ*novoCusto*100)/100, updatedAt:bumpTs(it)});
+    });
+    almoxMovs.unshift({id:uid(), local:almoxLocal, tipo:"entrada", itemId:aid, produto:alvo.produto,
+      unidade:alvo.unidade||"Un", qtd:p.qtd, data:dt||today(), nf:nf||"",
+      valorUnit:(vUnit>0?Math.round(vUnit*100)/100:0), pedido:ord.num||"",
+      fornecedor:ord.supplier||"", usuario:(currentUser&&currentUser.name)||"", updatedAt:Date.now()});
+    entrou++;
+  });
+  if(entrou){
+    saveAll(); renderAlmox(); if(typeof updateBadgesAlmox==="function") updateBadgesAlmox();
+    showToast("Recebido! "+entrou+" peca(s) entraram no estoque"+(criados?" ("+criados+" cadastrada(s))":"")+".");
+  } else {
+    showToast("Recebimento confirmado!");
+  }
+}
 var _origConfirmRcv = confirmReceive;
 confirmReceive = function(ordId) {
   ordId = ordId || window._rcvOrdId;
@@ -3709,16 +3767,9 @@ confirmReceive = function(ordId) {
   orders = orders.map(function(o){
     return o.id===ordId ? Object.assign({},o,{status:"chegada",nfNumber:nf,finalValue:val,receivedAt:dt,updatedAt:bumpTs(o)}) : o;
   });
-  saveAll();closeModal();renderOrders();showToast("Recebimento confirmado!");
+  saveAll();closeModal();renderOrders();
   var ord = null; for(var i=0;i<orders.length;i++){if(orders[i].id===ordId){ord=orders[i];break;}}
-  if (ord) {
-    setTimeout(function(){
-      if (confirm("Registrar entrada no Almoxarifado?\nPedido: "+(ord.description||"").slice(0,70))) {
-        almoxTab="entradas"; gotoSection("almox"); switchAlmTab("entradas");
-        setTimeout(function(){openMovModal("entrada");},300);
-      }
-    },400);
-  }
+  if (ord) _entradaAutomatica(ord, nf, val, dt); else showToast("Recebimento confirmado!");
 };
 
 
@@ -5098,7 +5149,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 43 - COMBUSTIVEL NO DASHBOARD</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 44 - RECEBIMENTO ENTRA NO ESTOQUE</div>
   </div>
 </div>
 </body></html>
