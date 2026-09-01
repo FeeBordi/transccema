@@ -397,7 +397,7 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
     <div id="sec-almox" class="section">
       <div class="tabs" id="alm-tabs" style="margin-bottom:14px"></div>
       <div id="alm-sec-estoque">
-        <div class="grid4" id="alm-stats" style="margin-bottom:14px"></div>
+        <div style="display:flex;gap:8px;margin-bottom:14px"><button class="btn btn-p" id="alm-loc-sp" onclick="switchAlmoxLocal('SP')">&#127981; Almoxarifado São Paulo</button><button class="btn btn-g" id="alm-loc-ba" onclick="switchAlmoxLocal('BA')">&#127796; Almoxarifado Bahia</button></div><div class="grid4" id="alm-stats" style="margin-bottom:14px"></div>
         <div class="toolbar">
           <div class="toolbar-left">
             <div class="search-box"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--mu)" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -448,6 +448,7 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
 
 
     <!-- CONFIGURACOES / SYNC -->
+    <div id="sec-abast" class="section"><iframe id="abast-frame" data-src="https://feebordi.github.io/abastecimentotransccema/" style="width:100%;height:calc(100vh - 105px);border:none;border-radius:10px;background:#fff" title="Abastecimentos"></iframe></div>
     <div id="sec-settings" class="section">
       <div class="card" style="margin-bottom:16px">
         <div class="card-title">&#128279; Sincronizacao em Tempo Real</div>
@@ -918,7 +919,7 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
     <div id="sec-almox" class="section">
       <div class="tabs" id="alm-tabs" style="margin-bottom:14px"></div>
       <div id="alm-sec-estoque">
-        <div class="grid4" id="alm-stats" style="margin-bottom:14px"></div>
+        <div style="display:flex;gap:8px;margin-bottom:14px"><button class="btn btn-p" id="alm-loc-sp" onclick="switchAlmoxLocal('SP')">&#127981; Almoxarifado São Paulo</button><button class="btn btn-g" id="alm-loc-ba" onclick="switchAlmoxLocal('BA')">&#127796; Almoxarifado Bahia</button></div><div class="grid4" id="alm-stats" style="margin-bottom:14px"></div>
         <div class="toolbar">
           <div class="toolbar-left">
             <div class="search-box"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--mu)" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -1100,7 +1101,8 @@ var PAGE_TITLES = {
   orders:"Pedidos de Compra",
   quotes:"Enviar Cotacao",
   suppliers:"Fornecedores",
-  expenses:"Controle de Despesas"
+  expenses:"Controle de Despesas",
+  abast:"Abastecimentos"
 };
 
 // ============================================================
@@ -1418,6 +1420,7 @@ function buildMenu() {
     {k:"expenses",  icon:"&#128196;", label:"Despesas"},
     {k:"almox",     icon:"&#128201;",  label:"Almoxarifado", bid:"balm"},
     {k:"os",        icon:"&#128295;",  label:"Ordens de Servico", bid:"bos"},
+    {k:"abast",     icon:"&#9981;",    label:"Abastecimentos"},
     {k:"settings",  icon:"&#9881;",    label:"Sync / Config"}
   ];
   var html = "";
@@ -1459,6 +1462,7 @@ function gotoSection(sec) {
     sections[i].classList.toggle("active", sections[i].id === "sec-" + sec);
   }
   ge("page-title").textContent = PAGE_TITLES[sec] || sec;
+  if (sec === "abast") { var _af=ge("abast-frame"); if(_af && !_af.src){ _af.src=_af.getAttribute("data-src"); } }
   if (sec === "dashboard") renderDashboard();
   if (sec === "orders")    renderOrders();
   if (sec === "quotes")    renderQuoteHistory();
@@ -3215,18 +3219,27 @@ function switchAlmTab(t) {
 }
 
 // -- ESTOQUE --
+var almoxLocal = "SP";
+function switchAlmoxLocal(loc){
+  almoxLocal = loc;
+  var sp=ge("alm-loc-sp"), ba=ge("alm-loc-ba");
+  if(sp) sp.className = "btn "+(loc==="SP"?"btn-p":"btn-g");
+  if(ba) ba.className = "btn "+(loc==="BA"?"btn-p":"btn-g");
+  renderAlmox();
+}
 function renderAlmox() {
   var q = (ge("alm-q") ? ge("alm-q").value : "").toLowerCase();
   var f = ge("alm-f") ? ge("alm-f").value : "all";
   var fil = almoxItems.filter(function(i) {
     if (i.deleted) return false;
+    if ((i.local||"SP")!==almoxLocal) return false;
     if (q && i.produto.toLowerCase().indexOf(q) < 0) return false;
     if (f==="low"   && !(i.saldo <  i.minimo && i.minimo > 0)) return false;
     if (f==="stock" && !(i.saldo >  0))  return false;
     if (f==="zero"  && !(i.saldo <= 0))  return false;
     return true;
   });
-  var ativos = almoxItems.filter(function(i){return !i.deleted;});
+  var ativos = almoxItems.filter(function(i){return !i.deleted && (i.local||"SP")===almoxLocal;});
   var tVal  = ativos.reduce(function(s,i){return s+(i.valorEstoque||0);},0);
   var tCom  = ativos.filter(function(i){return i.saldo>0;}).length;
   var tLow  = ativos.filter(function(i){return i.saldo<i.minimo&&i.minimo>0;}).length;
@@ -3479,7 +3492,7 @@ function saveQE(itemId) {
     var ns=it.saldo+qtd;
     return Object.assign({},it,{saldo:ns,custoMedio:Math.round(nc*100)/100,valorEstoque:Math.round(ns*Math.round(nc*100)/100*100)/100,updatedAt:Date.now()});
   });
-  almoxMovs.unshift({id:uid(),tipo:"entrada",itemId:itemId,produto:item.produto,unidade:item.unidade||"Un",qtd:qtd,data:gv("qe-dt")||today(),nf:gv("qe-nf")||"",valorUnit:val});
+  almoxMovs.unshift({id:uid(),local:(item.local||"SP"),tipo:"entrada",itemId:itemId,produto:item.produto,unidade:item.unidade||"Un",qtd:qtd,data:gv("qe-dt")||today(),nf:gv("qe-nf")||"",valorUnit:val});
   saveAll();closeModal();renderAlmox();
   showToast("+"+qtd+" unidades de "+item.produto.slice(0,30)+"!");
 }
@@ -3531,7 +3544,7 @@ function saveQX(itemId) {
     var ns=Math.max(0,it.saldo-qtd);
     return Object.assign({},it,{saldo:ns,valorEstoque:Math.round(ns*it.custoMedio*100)/100,updatedAt:Date.now()});
   });
-  almoxMovs.unshift({id:uid(),tipo:"saida",itemId:itemId,produto:item.produto,unidade:item.unidade||"Un",qtd:qtd,placa:placa,descricao:gv("qs-desc")||"",responsavel:gv("qs-resp")||"",data:gv("qs-dt")||today()});
+  almoxMovs.unshift({id:uid(),local:(item.local||"SP"),tipo:"saida",itemId:itemId,produto:item.produto,unidade:item.unidade||"Un",qtd:qtd,placa:placa,descricao:gv("qs-desc")||"",responsavel:gv("qs-resp")||"",data:gv("qs-dt")||today()});
   saveAll();closeModal();renderAlmox();
   showToast("-"+qtd+" unidades - Placa: "+placa);
 }
@@ -3540,7 +3553,7 @@ function saveQX(itemId) {
 function printPartsReport(){
   function money(v){ return "R$ "+(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
   var custoDe={}; (almoxItems||[]).forEach(function(it){ if(it&&it.id!=null) custoDe[it.id]=parseFloat(it.custoMedio)||0; });
-  var saidas=(almoxMovs||[]).filter(function(m){return m && m.tipo==="saida";});
+  var saidas=(almoxMovs||[]).filter(function(m){return m && m.tipo==="saida" && (m.local||"SP")===almoxLocal;});
   if(!saidas.length){ showToast("Nenhuma saida de peca registrada ainda",true); return; }
   var porPeca={};
   saidas.forEach(function(m){
@@ -3562,7 +3575,7 @@ function printPartsReport(){
   var w=window.open('','_blank'); if(!w){ showToast('Permita pop-ups para imprimir',true); return; }
   var css='body{font-family:Arial,Helvetica,sans-serif;padding:20px;color:#111}h1{font-size:18px;margin:0 0 2px}h2{font-size:14px;margin:18px 0 6px;border-bottom:2px solid #333;padding-bottom:3px}.meta{font-size:12px;color:#555;margin-bottom:10px}table{width:100%;border-collapse:collapse;margin-bottom:4px}th,td{border:1px solid #ccc;padding:5px 7px;font-size:11px;text-align:left}th{background:#f3f3f3}.hi{background:#fff4e5;border:1px solid #f5a623;border-radius:8px;padding:10px 12px;margin-bottom:12px}.hi .l{font-size:11px;color:#666}.hi .v{font-size:17px;font-weight:800}';
   w.document.write('<html><head><meta charset="utf-8"><title>Relatorio de Pecas - TRANSCCEMA</title><style>'+css+'</style></head><body>');
-  w.document.write('<h1>TRANSCCEMA - Relatorio de Pecas</h1>');
+  w.document.write('<h1>TRANSCCEMA - Relatorio de Pecas ('+(almoxLocal==="BA"?"Bahia":"Sao Paulo")+')</h1>');
   w.document.write('<div class="meta">Baseado nas saidas de estoque &nbsp;|&nbsp; '+saidas.length+' saidas &nbsp;|&nbsp; Emitido em '+new Date().toLocaleString('pt-BR')+'</div>');
   if(topPlaca) w.document.write('<div class="hi"><div class="l">Placa que mais gastou em pecas</div><div class="v">'+esc(topPlaca.placa)+' &mdash; '+money(topPlaca.custo)+'</div></div>');
   w.document.write('<h2>Pecas Mais Utilizadas (top 50)</h2><table><thead><tr><th style="text-align:center">#</th><th>Peca</th><th style="text-align:center">Qtd usada</th><th style="text-align:center">Nr saidas</th><th style="text-align:right">Custo total</th></tr></thead><tbody>'+pecasRows+'</tbody></table>');
@@ -3574,7 +3587,7 @@ function _normNome(s){ return (s||"").toString().toLowerCase().normalize("NFD").
 function detectarDuplicatas(){
   var map={};
   (almoxItems||[]).forEach(function(it){
-    if(!it || it.deleted) return;
+    if(!it || it.deleted || (it.local||"SP")!==almoxLocal) return;
     var k=_normNome(it.produto);
     if(!k) return;
     (map[k]=map[k]||[]).push(it);
@@ -3651,7 +3664,7 @@ function saveAlmNew() {
   if (!nome){showToast("Informe o nome",true);return;}
   var saldo = parseInt(gv("ni-saldo")||"0");
   var custo = parseFloat(gv("ni-custo")||"0");
-  almoxItems.push({id:uid(),produto:nome,grupo:"Pecas",unidade:gv("ni-un")||"Un",
+  almoxItems.push({id:uid(),local:almoxLocal,produto:nome,grupo:"Pecas",unidade:gv("ni-un")||"Un",
     saldo:saldo,minimo:parseInt(gv("ni-min")||"1"),maximo:parseInt(gv("ni-max")||"10"),
     custoMedio:custo,valorUlt:custo,valorEstoque:saldo*custo});
   saveAll();closeModal();renderAlmox();showToast("Item cadastrado!");
@@ -4529,6 +4542,7 @@ var ALL_MODULES = [
   {k:"expenses",  lb:"Despesas"},
   {k:"almox",     lb:"Almoxarifado"},
   {k:"os",        lb:"Ordens de Servico"},
+  {k:"abast",     lb:"Abastecimentos"},
   {k:"settings",  lb:"Configuracoes"}
 ];
 
@@ -5057,7 +5071,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 40 - CATEGORIA INTELIGENTE</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 42 - ABA ABASTECIMENTOS</div>
   </div>
 </div>
 </body></html>
