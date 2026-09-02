@@ -1792,6 +1792,8 @@ function dropCard(evt, colKey) {
   }
   if (!order || order.status === colKey) return;
   if (colKey === "aguardando" && order.status === "pedido") {
+    var _pc = _parsePecasPedido(order.description);
+    if (_pc.length > 1 && confirm("Este pedido tem "+_pc.length+" pecas.\n\nSeparar por fornecedor (cada peca vira um item proprio)?")) { openSplitOrderModal(order.id); return; }
     openSendQuoteModal(order.id); return;
   }
   if (colKey === "chegada" && order.status === "aguardando") {
@@ -1873,6 +1875,7 @@ function renderOrders() {
         if (o.estimatedValue) cardsHtml += '<div style="color:' + col.c + ';font-weight:700;font-size:12px;margin-bottom:8px">' + fmtR(o.estimatedValue) + '</div>';
         if (col.k === "pedido" && !ehSoLeitura()) {
           cardsHtml += '<button class="btn btn-p btn-sm" style="width:100%;justify-content:center" onclick="openSendQuoteModal(\'' + o.id + '\')">Enviar Cotacao</button>';
+          cardsHtml += '<button class="btn btn-g btn-sm" style="width:100%;justify-content:center;margin-top:5px" onclick="openSplitOrderModal(\'' + o.id + '\')">&#9986; Separar Pecas</button>';
         }
         if (col.k === "aguardando") {
           cardsHtml += '<div style="color:var(--m2);font-size:11px;margin-bottom:6px">Enviado: ' + fmtD(o.quoteSentAt) + ' - ' + (o.suppliersSent||[]).length + ' forn.</div>';
@@ -1937,6 +1940,64 @@ function deleteOrder(id) {
     return o.id === id ? Object.assign({}, o, {deleted:true, updatedAt:bumpTs(o)}) : o;
   });
   saveAll(); renderOrders(); showToast("Pedido excluido.");
+}
+function _parsePecasPedido(desc){
+  var linhas = String(desc||"").split(/\r?\n/).map(function(x){return x.trim();}).filter(Boolean);
+  if(!linhas.length) linhas=[String(desc||"").trim()];
+  return linhas.map(function(l){
+    var q=1, m=l.match(/=\s*(\d+)\s*$/);
+    if(m){ q=parseInt(m[1],10)||1; l=l.replace(/=\s*\d+\s*$/,"").trim(); }
+    return {nome:l, qtd:(q>0?q:1)};
+  });
+}
+function openSplitOrderModal(ordId){
+  var o=null; for(var i=0;i<orders.length;i++){ if(orders[i].id===ordId){o=orders[i];break;} }
+  if(!o){ showToast("Pedido nao encontrado",true); return; }
+  var pecas=_parsePecasPedido(o.description);
+  var fornAtivos=(suppliers||[]).filter(function(s){return !s.deleted && s.active!==false;});
+  var fOpts='<option value="">-- Fornecedor --</option>'+fornAtivos.map(function(s){return '<option value="'+esc(s.name)+'">'+esc(s.name)+'</option>';}).join("");
+  var linhas=pecas.map(function(p,i){
+    return '<tr>'
+      +'<td style="padding:5px 6px"><input class="form-input" id="sp-nome-'+i+'" value="'+esc(p.nome).replace(/"/g,"&quot;")+'" style="font-size:12px"></td>'
+      +'<td style="padding:5px 6px;width:70px"><input class="form-input" id="sp-qtd-'+i+'" type="number" min="1" value="'+p.qtd+'" style="font-size:12px"></td>'
+      +'<td style="padding:5px 6px;width:190px"><select class="form-select" id="sp-forn-'+i+'" style="font-size:12px">'+fOpts+'</select></td>'
+      +'<td style="padding:5px 6px;width:110px"><input class="form-input" id="sp-val-'+i+'" type="number" step="0.01" placeholder="0,00" style="font-size:12px"></td>'
+      +'</tr>';
+  }).join("");
+  openModal("Separar Pecas por Fornecedor - "+esc(o.num),
+    '<div style="color:var(--m2);font-size:12.5px;margin-bottom:10px">Cada peca vira um item proprio em <b>Aguardando Chegada</b>, com seu fornecedor e valor. Assim voce recebe cada uma na hora que chegar.</div>'
+    +'<div style="max-height:320px;overflow:auto;border:1px solid var(--bd);border-radius:8px">'
+    +'<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--s2)"><th style="text-align:left;padding:6px">Peca</th><th style="padding:6px">Qtd</th><th style="padding:6px">Fornecedor</th><th style="padding:6px">Valor R$</th></tr></thead><tbody>'+linhas+'</tbody></table></div>'
+    +'<input type="hidden" id="sp-count" value="'+pecas.length+'">'
+    +'<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px"><button class="btn btn-g" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="confirmSplitOrder(\''+ordId+'\')">Separar e Enviar</button></div>'
+  , true);
+}
+function confirmSplitOrder(ordId){
+  var o=null; for(var i=0;i<orders.length;i++){ if(orders[i].id===ordId){o=orders[i];break;} }
+  if(!o) return;
+  var n=parseInt(gv("sp-count")||"0",10)||0;
+  var novos=[], letras="ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  for(var k=0;k<n;k++){
+    var nome=(gv("sp-nome-"+k)||"").trim(); if(!nome) continue;
+    var qtd=parseInt(gv("sp-qtd-"+k)||"1",10)||1;
+    var forn=(gv("sp-forn-"+k)||"").trim();
+    var val=parseFloat(gv("sp-val-"+k)||"0")||0;
+    novos.push({
+      id:uid(), updatedAt:Date.now(),
+      num:o.num+"-"+(letras[k]||(k+1)),
+      date:o.date||today(),
+      description:nome+"="+qtd,
+      vehicle:o.vehicle||"", category:o.category||"", urgency:o.urgency||"media",
+      estimatedValue:val, supplier:forn,
+      status:"aguardando", quoteSentAt:today(),
+      suppliersSent: forn?[forn]:[], origemPedido:o.num
+    });
+  }
+  if(!novos.length){ showToast("Informe ao menos uma peca",true); return; }
+  novos.forEach(function(x){ orders.push(x); });
+  orders=orders.map(function(x){ return x.id===ordId ? Object.assign({},x,{deleted:true,updatedAt:bumpTs(x)}) : x; });
+  saveAll(); closeModal(); renderOrders();
+  showToast(novos.length+" peca(s) separada(s) em Aguardando Chegada!");
 }
 function openSendQuoteModal(ordId) {
   var o = orders.filter(function(x){return x.id===ordId;})[0];
@@ -5149,7 +5210,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 44 - RECEBIMENTO ENTRA NO ESTOQUE</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 45 - SEPARAR PECAS POR FORNECEDOR</div>
   </div>
 </div>
 </body></html>
