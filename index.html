@@ -2967,7 +2967,9 @@ function pushToServer(callback) {
     if (merged.almoxDelta) Object.keys(merged.almoxDelta).forEach(function(id){
       for (var i=0;i<almoxItems.length;i++){ if(almoxItems[i].id===id){ Object.assign(almoxItems[i], merged.almoxDelta[id]); break; } }
     });
-    if (merged.almoxNovos) merged.almoxNovos.forEach(function(it){ if(it && it.id!=null) almoxItems.push(it); });
+    if (merged.almoxNovos) { var _m={}; almoxItems.forEach(function(x){ if(x&&x.id!=null) _m[x.id]=1; });
+      merged.almoxNovos.forEach(function(it){ if(it && it.id!=null && !_m[it.id]){ _m[it.id]=1; almoxItems.push(it); } }); }
+    almoxItems = almoxItems.filter(function(x){ return x && !x.deleted; });
     saveLocalOnly();
 
     // 4. Envia para o Sheets
@@ -3129,6 +3131,14 @@ function setAllData(obj) {
   if (obj.almoxMovs) almoxMovs = mergeById(almoxMovs, obj.almoxMovs);
   if (obj.osDelta && obj.osDelta.length) osData = mergeOSById(osData || [], obj.osDelta);
   if (obj.osData && obj.osData.length)   osData = mergeOSById(osData || [], obj.osData);
+  if (obj.almoxNovos && obj.almoxNovos.length) {
+    obj.almoxNovos.forEach(function(it){
+      if(!it || !it.id) return;
+      var existe=false;
+      for(var i=0;i<almoxItems.length;i++){ if(almoxItems[i].id===it.id){ Object.assign(almoxItems[i], it); existe=true; break; } }
+      if(!existe) almoxItems.push(it);
+    });
+  }
   if (obj.almoxDelta && Object.keys(obj.almoxDelta).length > 0) {
     Object.keys(obj.almoxDelta).forEach(function(id) {
       for (var i = 0; i < almoxItems.length; i++) {
@@ -3234,6 +3244,8 @@ packData = function() {
     if (_DEFAULT_ALM_IDS[item.id]) {
       var orig = _DEFAULT_ALM_BY_ID[item.id];
       if (!orig ||
+          item.deleted ||
+          item.local !== orig.local ||
           item.saldo !== orig.saldo ||
           item.custoMedio !== orig.custoMedio ||
           item.valorEstoque !== orig.valorEstoque ||
@@ -3278,7 +3290,9 @@ unpackData = function(obj) {
     var novosMap = {};
     locaisNovos.forEach(function(it){ if (it && it.id != null) novosMap[it.id] = it; });
     if (temNovos) obj.almoxNovos.forEach(function(it){ if (it && it.id != null) novosMap[it.id] = it; });
-    Object.keys(novosMap).forEach(function(id){ almoxItems.push(novosMap[id]); });
+    var _ex={}; almoxItems.forEach(function(x){ if(x&&x.id!=null) _ex[x.id]=1; });
+    Object.keys(novosMap).forEach(function(id){ if(!_ex[id]) almoxItems.push(novosMap[id]); });
+    almoxItems = almoxItems.filter(function(x){ return x && !x.deleted; });
   }
   if (obj.almoxMovs) almoxMovs = obj.almoxMovs;
   saveLocalOnly();
@@ -5210,7 +5224,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 45 - SEPARAR PECAS POR FORNECEDOR</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 47 - DUPLICATAS NAO VOLTAM</div>
   </div>
 </div>
 </body></html>
