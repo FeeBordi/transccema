@@ -3796,13 +3796,13 @@ function _entradaAutomatica(ord, nf, val, dt){
     var alvo = null, chave = _normNome(p.nome);
     for(var i=0;i<almoxItems.length;i++){
       var it = almoxItems[i];
-      if(it.deleted || (it.local||"SP")!==almoxLocal) continue;
+      if(it.deleted || (it.local||"SP")!=="SP") continue;
       var n = _normNome(it.produto);
       if(n===chave || (n && chave && (n.indexOf(chave)>=0 || chave.indexOf(n)>=0))){ alvo=it; break; }
     }
     if(!alvo){
-      if(!confirm('A peca abaixo nao esta no estoque ('+(almoxLocal==="BA"?"Bahia":"Sao Paulo")+'):\n\n'+p.nome+'\n\nCadastrar e dar entrada de '+p.qtd+'?')) return;
-      alvo = {id:uid(), local:almoxLocal, produto:p.nome, grupo:"Pecas", unidade:"Un",
+      if(!confirm('A peca abaixo nao esta no estoque de Sao Paulo:\n\n'+p.nome+'\n\nCadastrar e dar entrada de '+p.qtd+'?')) return;
+      alvo = {id:uid(), local:"SP", produto:p.nome, grupo:"Pecas", unidade:"Un",
               saldo:0, minimo:1, maximo:10, custoMedio:0, valorUlt:0, valorEstoque:0, updatedAt:Date.now()};
       almoxItems.push(alvo); criados++;
     }
@@ -3818,7 +3818,7 @@ function _entradaAutomatica(ord, nf, val, dt){
         valorUlt:(vUnit>0?Math.round(vUnit*100)/100:it.valorUlt),
         valorEstoque:Math.round(totalQ*novoCusto*100)/100, updatedAt:bumpTs(it)});
     });
-    almoxMovs.unshift({id:uid(), local:almoxLocal, tipo:"entrada", itemId:aid, produto:alvo.produto,
+    almoxMovs.unshift({id:uid(), local:"SP", tipo:"entrada", itemId:aid, produto:alvo.produto,
       unidade:alvo.unidade||"Un", qtd:p.qtd, data:dt||today(), nf:nf||"",
       valorUnit:(vUnit>0?Math.round(vUnit*100)/100:0), pedido:ord.num||"",
       fornecedor:ord.supplier||"", usuario:(currentUser&&currentUser.name)||"", updatedAt:Date.now()});
@@ -3826,7 +3826,7 @@ function _entradaAutomatica(ord, nf, val, dt){
   });
   if(entrou){
     saveAll(); renderAlmox(); if(typeof updateBadgesAlmox==="function") updateBadgesAlmox();
-    showToast("Recebido! "+entrou+" peca(s) entraram no estoque"+(criados?" ("+criados+" cadastrada(s))":"")+".");
+    showToast("Recebido! "+entrou+" peca(s) entraram no estoque de Sao Paulo"+(criados?" ("+criados+" cadastrada(s))":"")+".");
   } else {
     showToast("Recebimento confirmado!");
   }
@@ -5224,7 +5224,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 47 - DUPLICATAS NAO VOLTAM</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 48 - RECEBIMENTO SEMPRE SP</div>
   </div>
 </div>
 </body></html>
