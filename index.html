@@ -188,7 +188,7 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
             <option value="ano">Este ano</option>
           </select>
         </div>
-        <button class="btn btn-p" onclick="openNewOrderModal()">+ Novo Pedido</button>
+        <button class="btn btn-g" onclick="printSupplierReport()" style="margin-right:8px">&#128202; Relatorio Fornecedor</button><button class="btn btn-p" onclick="openNewOrderModal()">+ Novo Pedido</button>
       </div>
       <div class="grid3" id="order-counters" style="margin-bottom:14px"></div>
       <div class="kw" id="kanban-board"></div>
@@ -710,7 +710,7 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
             <option value="ano">Este ano</option>
           </select>
         </div>
-        <button class="btn btn-p" onclick="openNewOrderModal()">+ Novo Pedido</button>
+        <button class="btn btn-g" onclick="printSupplierReport()" style="margin-right:8px">&#128202; Relatorio Fornecedor</button><button class="btn btn-p" onclick="openNewOrderModal()">+ Novo Pedido</button>
       </div>
       <div class="grid3" id="order-counters" style="margin-bottom:14px"></div>
       <div class="kw" id="kanban-board"></div>
@@ -2051,6 +2051,60 @@ function confirmMoveToAguardando(ordId) {
   });
   saveAll(); closeModal(); renderOrders(); showToast("Movido para Aguardando!");
 }
+function printSupplierReport(){
+  function money(v){ return "R$ "+(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  function dISO(d){ var m=String(d||"").match(/^(\d{4})-(\d{2})-(\d{2})/); return m?new Date(+m[1],+m[2]-1,+m[3]):null; }
+  var recebidos=(orders||[]).filter(function(o){ return o && !o.deleted && o.status==="chegada"; });
+  if(!recebidos.length){ showToast("Nenhum pedido recebido ainda",true); return; }
+  var mp={};
+  recebidos.forEach(function(o){
+    var f=(o.supplier||"(sem fornecedor)").trim()||"(sem fornecedor)";
+    if(!mp[f]) mp[f]={n:0, valor:0, falta:0, defeito:0, dias:[], comProblema:0};
+    var r=mp[f]; r.n++; r.valor+=Number(o.finalValue||0)||0;
+    var fa=parseInt(o.qtdFaltante||0,10)||0, de=parseInt(o.qtdDefeito||0,10)||0;
+    r.falta+=fa; r.defeito+=de; if(fa||de) r.comProblema++;
+    var ini=dISO(o.quoteSentAt)||dISO(o.date), fim=dISO(o.receivedAt);
+    if(ini&&fim){ var d=Math.round((fim-ini)/86400000); if(d>=0&&d<400) r.dias.push(d); }
+  });
+  var arr=Object.keys(mp).map(function(f){
+    var r=mp[f];
+    var med=r.dias.length? (r.dias.reduce(function(a,b){return a+b;},0)/r.dias.length) : null;
+    var pior=r.dias.length? Math.max.apply(null,r.dias) : null;
+    return {forn:f, n:r.n, valor:r.valor, falta:r.falta, defeito:r.defeito, comProblema:r.comProblema, med:med, pior:pior};
+  });
+  arr.sort(function(a,b){ return b.valor-a.valor; });
+  var rows=arr.map(function(x){
+    var pct = x.n? (x.comProblema/x.n*100) : 0;
+    var cor = pct>=30?"#c0392b":(pct>0?"#b7791f":"#1e8449");
+    return '<tr><td><b>'+esc(x.forn)+'</b></td>'
+      +'<td style="text-align:center">'+x.n+'</td>'
+      +'<td style="text-align:right">'+money(x.valor)+'</td>'
+      +'<td style="text-align:center">'+(x.med!==null?x.med.toFixed(1)+' dias':'-')+'</td>'
+      +'<td style="text-align:center">'+(x.pior!==null?x.pior+' dias':'-')+'</td>'
+      +'<td style="text-align:center;color:'+(x.falta?"#c0392b":"#666")+';font-weight:700">'+x.falta+'</td>'
+      +'<td style="text-align:center;color:'+(x.defeito?"#c0392b":"#666")+';font-weight:700">'+x.defeito+'</td>'
+      +'<td style="text-align:center;color:'+cor+';font-weight:700">'+pct.toFixed(0)+'%</td></tr>';
+  }).join("");
+  var det=recebidos.filter(function(o){ return (parseInt(o.qtdFaltante||0,10)||0)||(parseInt(o.qtdDefeito||0,10)||0); })
+    .sort(function(a,b){ return String(b.receivedAt||"").localeCompare(String(a.receivedAt||"")); })
+    .map(function(o){
+      return '<tr><td>'+esc(o.receivedAt||"-")+'</td><td>'+esc(o.num||"-")+'</td><td>'+esc(o.supplier||"-")+'</td>'
+        +'<td>'+esc(String(o.description||"").slice(0,60))+'</td>'
+        +'<td style="text-align:center">'+(o.qtdFaltante||0)+'</td>'
+        +'<td style="text-align:center">'+(o.qtdDefeito||0)+'</td>'
+        +'<td>'+esc(o.obsRecebimento||"")+'</td></tr>';
+    }).join("");
+  var w=window.open('','_blank'); if(!w){ showToast('Permita pop-ups para imprimir',true); return; }
+  var css='body{font-family:Arial,Helvetica,sans-serif;padding:20px;color:#111}h1{font-size:18px;margin:0 0 2px}h2{font-size:14px;margin:18px 0 6px;border-bottom:2px solid #333;padding-bottom:3px}.meta{font-size:12px;color:#555;margin-bottom:10px}table{width:100%;border-collapse:collapse;margin-bottom:4px}th,td{border:1px solid #ccc;padding:5px 7px;font-size:11px;text-align:left}th{background:#f3f3f3}';
+  w.document.write('<html><head><meta charset="utf-8"><title>Relatorio por Fornecedor - TRANSCCEMA</title><style>'+css+'</style></head><body>');
+  w.document.write('<h1>TRANSCCEMA - Desempenho por Fornecedor</h1>');
+  w.document.write('<div class="meta">'+recebidos.length+' pedidos recebidos &nbsp;|&nbsp; Emitido em '+new Date().toLocaleString('pt-BR')+'</div>');
+  w.document.write('<h2>Resumo por Fornecedor</h2><table><thead><tr><th>Fornecedor</th><th style="text-align:center">Pedidos</th><th style="text-align:right">Valor total</th><th style="text-align:center">Entrega media</th><th style="text-align:center">Pior entrega</th><th style="text-align:center">Faltantes</th><th style="text-align:center">Defeitos</th><th style="text-align:center">% c/ problema</th></tr></thead><tbody>'+rows+'</tbody></table>');
+  w.document.write('<h2>Ocorrencias (faltas e defeitos)</h2><table><thead><tr><th>Data</th><th>Pedido</th><th>Fornecedor</th><th>Descricao</th><th style="text-align:center">Faltante</th><th style="text-align:center">Defeito</th><th>Observacao</th></tr></thead><tbody>'+(det||'<tr><td colspan="7" style="text-align:center;color:#999">Nenhuma ocorrencia registrada</td></tr>')+'</tbody></table>');
+  w.document.write('<div style="margin-top:10px;font-size:10px;color:#777">Entrega = dias entre o envio da cotacao e o recebimento.</div>');
+  w.document.write('</body></html>'); w.document.close();
+  setTimeout(function(){ w.focus(); w.print(); }, 350);
+}
 function openReceiveModal(ordId) {
   var o = orders.filter(function(x){return x.id===ordId;})[0];
   if (!o) return;
@@ -2088,6 +2142,16 @@ function openReceiveModal(ordId) {
     + '<button class="btn" style="background:var(--grn);color:#fff;font-weight:700;white-space:nowrap" onclick="rcvAdicionarItem()">+ Adicionar</button>'
     + '</div></div>'
     + '<div id="rcv-itens-lista" style="min-height:32px;font-size:12px;color:var(--mu)">Nenhum item adicionado.</div>'
+    + '</div>'
+
+    // Conferencia: faltas e defeitos
+    + '<div style="background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2);border-radius:8px;padding:12px;margin-bottom:14px">'
+    + '<div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:10px">Conferencia do Pedido</div>'
+    + '<div class="form-row">'
+    + '<div class="form-group"><label class="form-label">Qtd Faltante</label><input id="rcv-falta" type="number" min="0" class="form-input" value="0"></div>'
+    + '<div class="form-group"><label class="form-label">Qtd com Defeito</label><input id="rcv-defeito" type="number" min="0" class="form-input" value="0"></div>'
+    + '</div>'
+    + '<div class="form-group" style="margin-top:8px"><label class="form-label">Observacao (opcional)</label><input id="rcv-obs" class="form-input" placeholder="Ex: 2 lampadas quebradas na caixa"></div>'
     + '</div>'
 
     + '<div style="display:flex;justify-content:flex-end;gap:10px">'
@@ -3839,8 +3903,12 @@ confirmReceive = function(ordId) {
   if (!nf){showToast("Informe NF",true);return;}
   if (!val){showToast("Informe valor",true);return;}
   var dt = gv("rcv-date")||today();
+  var qFalta = parseInt(gv("rcv-falta")||"0",10)||0;
+  var qDefeito = parseInt(gv("rcv-defeito")||"0",10)||0;
+  var obsRcv = (gv("rcv-obs")||"").trim();
   orders = orders.map(function(o){
-    return o.id===ordId ? Object.assign({},o,{status:"chegada",nfNumber:nf,finalValue:val,receivedAt:dt,updatedAt:bumpTs(o)}) : o;
+    return o.id===ordId ? Object.assign({},o,{status:"chegada",nfNumber:nf,finalValue:val,receivedAt:dt,
+      qtdFaltante:qFalta, qtdDefeito:qDefeito, obsRecebimento:obsRcv, updatedAt:bumpTs(o)}) : o;
   });
   saveAll();closeModal();renderOrders();
   var ord = null; for(var i=0;i<orders.length;i++){if(orders[i].id===ordId){ord=orders[i];break;}}
@@ -5224,7 +5292,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 48 - RECEBIMENTO SEMPRE SP</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 49 - CONFERENCIA E RELATORIO FORNECEDOR</div>
   </div>
 </div>
 </body></html>
