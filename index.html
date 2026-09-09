@@ -1644,6 +1644,82 @@ var costLabels = {
     }
   }
 };
+function detalharCard(tipo){
+  var fMes = ge("dash-month") ? ge("dash-month").value : "";
+  function money(v){ return "R$ "+(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  var manutF = manut.filter(function(e){return !e.deleted && (!fMes || e.month===fMes);});
+  var adminF = adminExp.filter(function(e){return !e.deleted && (!fMes || e.month===fMes);});
+  var tM=manutF.reduce(function(x,e){return x+(e.value||0);},0);
+  var tA=adminF.reduce(function(x,e){return x+(e.value||0);},0);
+  var fu = fMes ? (fuelByMonth[fMes]||0) : (fuelTotal||0);
+  var per = fMes || "Ano todo";
+
+  function tabelaCat(lista, mapa){
+    var mp={}; lista.forEach(function(e){ var k=e.category||"outros"; mp[k]=(mp[k]||0)+(e.value||0); });
+    var arr=Object.keys(mp).map(function(k){return {n:(mapa[k]||CAT_UNI[k]||k), v:mp[k]};});
+    arr.sort(function(a,b){return b.v-a.v;});
+    var tot=arr.reduce(function(x,y){return x+y.v;},0);
+    if(!arr.length) return '<div style="color:var(--mu);font-size:12.5px;padding:10px 0">Nenhum lancamento no periodo.</div>';
+    return '<table style="width:100%;border-collapse:collapse;font-size:12.5px">'
+      +'<thead><tr style="background:var(--s2)"><th style="text-align:left;padding:6px 8px;color:var(--m2)">Categoria</th><th style="text-align:right;padding:6px 8px;color:var(--m2)">Valor</th><th style="text-align:right;padding:6px 8px;color:var(--m2)">%</th></tr></thead><tbody>'
+      +arr.map(function(x){
+        return '<tr><td style="padding:6px 8px;border-top:1px solid var(--bd)">'+esc(x.n)+'</td>'
+        +'<td style="padding:6px 8px;border-top:1px solid var(--bd);text-align:right;font-weight:700">'+money(x.v)+'</td>'
+        +'<td style="padding:6px 8px;border-top:1px solid var(--bd);text-align:right;color:var(--m2)">'+(tot?(x.v/tot*100).toFixed(1):"0")+'%</td></tr>';
+      }).join("")+'</tbody></table>';
+  }
+  function ultimos(lista){
+    var l=lista.slice().sort(function(a,b){return String(b.date||"").localeCompare(String(a.date||""));}).slice(0,8);
+    if(!l.length) return "";
+    return '<div style="font-size:12px;font-weight:700;color:var(--m2);margin:14px 0 6px">Ultimos lancamentos</div>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:12px">'+l.map(function(e){
+        return '<tr><td style="padding:5px 8px;border-top:1px solid var(--bd);white-space:nowrap">'+esc(fmtD(e.date))+'</td>'
+          +'<td style="padding:5px 8px;border-top:1px solid var(--bd)">'+esc(String(e.description||"").slice(0,55))+'</td>'
+          +'<td style="padding:5px 8px;border-top:1px solid var(--bd)">'+esc(e.supplier||e.beneficiary||"")+'</td>'
+          +'<td style="padding:5px 8px;border-top:1px solid var(--bd);text-align:right;font-weight:700">'+money(e.value)+'</td></tr>';
+      }).join("")+'</table>';
+  }
+
+  var titulo, corpo, tg=tM+tA+fu;
+  if(tipo==="manut"){
+    titulo="Manutencao / Pecas - "+per;
+    corpo='<div style="font-size:22px;font-weight:800;color:var(--blu);margin-bottom:4px">'+money(tM)+'</div>'
+      +'<div style="color:var(--m2);font-size:12.5px;margin-bottom:12px">'+manutF.length+' lancamento(s) de compras e servicos, vindos da tela de Despesas.</div>'
+      +tabelaCat(manutF, CAT_MAN)+ultimos(manutF);
+  } else if(tipo==="admin"){
+    titulo="Despesas Administrativas - "+per;
+    corpo='<div style="font-size:22px;font-weight:800;color:var(--pur);margin-bottom:4px">'+money(tA)+'</div>'
+      +'<div style="color:var(--m2);font-size:12.5px;margin-bottom:12px">'+adminF.length+' lancamento(s), vindos da tela de Despesas.</div>'
+      +tabelaCat(adminF, CAT_ADM)+ultimos(adminF);
+  } else if(tipo==="total"){
+    titulo="Total Geral - "+per;
+    function linha(lb,v,cor){
+      return '<tr><td style="padding:8px;border-top:1px solid var(--bd)">'+lb+'</td>'
+        +'<td style="padding:8px;border-top:1px solid var(--bd);text-align:right;font-weight:700;color:'+cor+'">'+money(v)+'</td>'
+        +'<td style="padding:8px;border-top:1px solid var(--bd);text-align:right;color:var(--m2)">'+(tg?(v/tg*100).toFixed(1):"0")+'%</td></tr>';
+    }
+    corpo='<div style="font-size:22px;font-weight:800;color:var(--acc);margin-bottom:4px">'+money(tg)+'</div>'
+      +'<div style="color:var(--m2);font-size:12.5px;margin-bottom:12px">O total geral e a soma destas tres fontes:</div>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:13px"><tbody>'
+      +linha("Manutencao / Pecas", tM, "var(--blu)")
+      +linha("Despesas Administrativas", tA, "var(--pur)")
+      +linha("Combustivel (sistema de Abastecimento)", fu, "#f0a020")
+      +'</tbody></table>'
+      +'<div style="margin-top:12px;color:var(--mu);font-size:11.5px">Clique nos cards de Manutencao ou Administrativo para ver o detalhe de cada um.</div>';
+  } else {
+    titulo="% Administrativo sobre o Total - "+per;
+    corpo='<div style="font-size:22px;font-weight:800;color:var(--tea);margin-bottom:4px">'+(tg?((tA/tg)*100).toFixed(1)+"%":"--")+'</div>'
+      +'<div style="color:var(--m2);font-size:12.5px;margin-bottom:12px">Quanto o administrativo representa do custo total.</div>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:13px"><tbody>'
+      +'<tr><td style="padding:8px">Despesas Administrativas</td><td style="padding:8px;text-align:right;font-weight:700;color:var(--pur)">'+money(tA)+'</td></tr>'
+      +'<tr><td style="padding:8px;border-top:1px solid var(--bd)">Custo Total (manut + admin + combustivel)</td><td style="padding:8px;border-top:1px solid var(--bd);text-align:right;font-weight:700">'+money(tg)+'</td></tr>'
+      +'</tbody></table>';
+  }
+  openModal(titulo, corpo
+    +'<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">'
+    +'<button class="btn btn-g" onclick="closeModal();gotoSection(\'expenses\')">Ver Despesas</button>'
+    +'<button class="btn btn-p" onclick="closeModal()">Fechar</button></div>', true);
+}
 function renderDashboard() {
   if(window.Chart && !window._clReg){ try{ Chart.register(costLabels); }catch(e){} window._clReg=true; }
   var _dm = ge("dash-month");
@@ -1661,19 +1737,19 @@ function renderDashboard() {
 
   // Stat cards
   var statData = [
-    {label:"Total Geral 2026", value:fmtR(tG), sub:(fMes||("Jan-"+MONTHS[_lastIdx].slice(0,3))), color:"var(--acc)", icon:"&#128176;"},
-    {label:"Manutencao/Pecas", value:fmtR(tM), sub:"compras e servicos", color:"var(--blu)", icon:"&#128295;"},
-    {label:"Despesas Admin",   value:fmtR(tA), sub:"folha, FGTS, viagens", color:"var(--pur)", icon:"&#127970;"},
-    {label:"% Admin/Total",    value:tG ? ((tA/tG)*100).toFixed(1)+"%" : "--", sub:"participacao", color:"var(--tea)", icon:"&#128202;"}
+    {k:"total", label:"Total Geral 2026", value:fmtR(tG), sub:(fMes||("Jan-"+MONTHS[_lastIdx].slice(0,3))), color:"var(--acc)", icon:"&#128176;"},
+    {k:"manut", label:"Manutencao/Pecas", value:fmtR(tM), sub:"compras e servicos", color:"var(--blu)", icon:"&#128295;"},
+    {k:"admin", label:"Despesas Admin",   value:fmtR(tA), sub:"folha, FGTS, viagens", color:"var(--pur)", icon:"&#127970;"},
+    {k:"pct",   label:"% Admin/Total",    value:tG ? ((tA/tG)*100).toFixed(1)+"%" : "--", sub:"participacao", color:"var(--tea)", icon:"&#128202;"}
   ];
   var statsHtml = "";
   for (var i = 0; i < statData.length; i++) {
     var s = statData[i];
-    statsHtml += '<div class="stat-card">'
+    statsHtml += '<div class="stat-card" onclick="detalharCard(\''+s.k+'\')" style="cursor:pointer" title="Clique para ver de onde vem esse valor">'
       + '<div class="stat-icon" style="background:' + s.color + '18">' + s.icon + '</div>'
       + '<div><div class="stat-lbl">' + s.label + '</div>'
       + '<div class="stat-val" style="color:' + s.color + '">' + s.value + '</div>'
-      + '<div class="stat-sub">' + s.sub + '</div></div></div>';
+      + '<div class="stat-sub">' + s.sub + ' &nbsp;&#128269;</div></div></div>';
   }
   ge("stat-cards").innerHTML = statsHtml;
 
@@ -5400,7 +5476,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 51 - FILTROS COM QUADRADINHOS</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 52 - CARDS CLICAVEIS COM DETALHE</div>
   </div>
 </div>
 </body></html>
