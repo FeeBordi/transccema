@@ -280,8 +280,8 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
             <option value="ano">Este ano</option>
           </select>
           <select id="expense-month" class="form-select" style="width:auto;padding:8px 12px;font-size:12px" onchange="renderExpenses()"></select>
-          <select id="expense-cat" class="form-select" style="width:auto;padding:8px 12px;font-size:12px" onchange="renderExpenses()"></select>
-          <select id="expense-payment" class="form-select" style="width:auto;padding:8px 12px;font-size:12px" onchange="renderExpenses()"></select>
+          <select id="expense-cat" class="form-select" multiple size="3" title="Segure Ctrl para escolher varias" style="width:auto;min-width:150px;padding:6px 10px;font-size:12px" onchange="renderExpenses()"></select>
+          <select id="expense-payment" class="form-select" multiple size="3" title="Segure Ctrl para escolher varios" style="width:auto;min-width:150px;padding:6px 10px;font-size:12px" onchange="renderExpenses()"></select>
           <input id="expense-date" type="date" class="form-input" style="width:auto;padding:7px 10px;font-size:12px" onchange="renderExpenses()" title="Filtrar por data especifica">
         </div>
         <button class="btn btn-g" onclick="printConsolidatedReport()" style="margin-right:8px">&#128424; Consolidado</button><button class="btn btn-g" onclick="printExpensesReport()" style="margin-right:8px">&#128424; Imprimir</button><button class="btn btn-p" id="expense-add-btn" onclick="openExpenseModal()">+ Lancar</button>
@@ -802,8 +802,8 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
             <option value="ano">Este ano</option>
           </select>
           <select id="expense-month" class="form-select" style="width:auto;padding:8px 12px;font-size:12px" onchange="renderExpenses()"></select>
-          <select id="expense-cat" class="form-select" style="width:auto;padding:8px 12px;font-size:12px" onchange="renderExpenses()"></select>
-          <select id="expense-payment" class="form-select" style="width:auto;padding:8px 12px;font-size:12px" onchange="renderExpenses()"></select>
+          <select id="expense-cat" class="form-select" multiple size="3" title="Segure Ctrl para escolher varias" style="width:auto;min-width:150px;padding:6px 10px;font-size:12px" onchange="renderExpenses()"></select>
+          <select id="expense-payment" class="form-select" multiple size="3" title="Segure Ctrl para escolher varios" style="width:auto;min-width:150px;padding:6px 10px;font-size:12px" onchange="renderExpenses()"></select>
           <input id="expense-date" type="date" class="form-input" style="width:auto;padding:7px 10px;font-size:12px" onchange="renderExpenses()" title="Filtrar por data especifica">
         </div>
         <button class="btn btn-g" onclick="printConsolidatedReport()" style="margin-right:8px">&#128424; Consolidado</button><button class="btn btn-g" onclick="printExpensesReport()" style="margin-right:8px">&#128424; Imprimir</button><button class="btn btn-p" id="expense-add-btn" onclick="openExpenseModal()">+ Lancar</button>
@@ -2499,6 +2499,11 @@ function buildExpenseTabs() {
   var et=ge("expense-tabs"); if(et) et.innerHTML="";
 }
 function switchExpTab(t) { expenseTab = t; buildExpenseTabs(); buildExpenseFilters(); renderExpenses(); }
+function getMultiVals(id){
+  var el=ge(id); if(!el) return [];
+  if(el.multiple){ var out=[]; for(var i=0;i<el.options.length;i++){ if(el.options[i].selected && el.options[i].value) out.push(el.options[i].value); } return out; }
+  return el.value?[el.value]:[];
+}
 function buildExpenseFilters() {
   buildExpenseTabs();
   var data = (adminExp||[]).concat(manut||[]).filter(function(e){return !e.deleted;});
@@ -2508,13 +2513,14 @@ function buildExpenseFilters() {
   var em = ge("expense-month"), ec = ge("expense-cat");
   var cm = em ? em.value : "", cc = ec ? ec.value : "";
   if (em) { em.innerHTML = '<option value="">Todos os meses</option>' + months.map(function(m){return '<option value="'+m+'"'+(cm===m?" selected":"")+'>'+m+'</option>';}).join(""); }
-  if (ec) { ec.innerHTML = '<option value="">Todas categorias</option>' + Object.keys(cats).map(function(k){return '<option value="'+k+'"'+(cc===k?" selected":"")+'>'+cats[k]+'</option>';}).join(""); }
+  if (ec) { var _sel=getMultiVals("expense-cat"); ec.innerHTML = (ec.multiple?"":'<option value="">Todas categorias</option>') + Object.keys(cats).map(function(k){return '<option value="'+k+'"'+((_sel.indexOf(k)>=0||cc===k)?" selected":"")+'>'+cats[k]+'</option>';}).join(""); }
   var ep = ge("expense-payment"); var cp = ep ? ep.value : "";
   if (ep) {
     var pgs = [];
     data.forEach(function(e){ var pv = e.payment||""; if (pv && pgs.indexOf(pv)<0) pgs.push(pv); });
     pgs.sort();
-    ep.innerHTML = '<option value="">Todos pagamentos</option>' + pgs.map(function(pv){return '<option value="'+pv+'"'+(cp===pv?" selected":"")+'>'+pv+'</option>';}).join("");
+    var _selp=getMultiVals("expense-payment");
+    ep.innerHTML = (ep.multiple?"":'<option value="">Todos pagamentos</option>') + pgs.map(function(pv){return '<option value="'+pv+'"'+((_selp.indexOf(pv)>=0||cp===pv)?" selected":"")+'>'+pv+'</option>';}).join("");
   }
   var btn = ge("expense-add-btn"); if (btn) btn.textContent = "+ Lancar Despesa";
   var tn = ge("th-nf"), ts = ge("th-sup"); if(tn) tn.textContent="NF"; if(ts) ts.textContent="Fornec./Benef.";
@@ -2615,20 +2621,55 @@ function printCard(btn){
   w.document.write('</body></html>'); w.document.close();
   setTimeout(function(){ w.focus(); w.print(); }, 350);
 }
+function _ehManutencao(cat){
+  return ["manutencao","pecas","servico","acidente","lubrificantes","borracharia"].indexOf(String(cat||"")) >= 0;
+}
 function printExpensesReport(){
-  var tbl=ge("expense-table-body");
-  var total=ge("expense-total")?ge("expense-total").textContent:"";
-  var count=ge("expense-count")?ge("expense-count").textContent:"";
-  var tab="Despesas (Administrativas + Manutencao/Pecas)";
-  var fpay=gv("expense-payment")||"Todos", fmn=gv("expense-month")||"Todos", fca=gv("expense-cat")||"Todas";
-  var head='<tr><th>Data</th><th>Mes</th><th>NF</th><th>Benef./Fornecedor</th><th>Descricao</th><th>Categoria</th><th>Valor</th><th>Pgto</th></tr>';
-  var body='', trs=tbl?tbl.querySelectorAll('tr'):[];
-  for(var i=0;i<trs.length;i++){ var tds=trs[i].querySelectorAll('td'); if(tds.length<8){ body+='<tr><td colspan="8" style="text-align:center">'+(tds[0]?tds[0].innerText:'')+'</td></tr>'; continue; } body+='<tr>'; for(var j=0;j<8;j++){ body+='<td>'+tds[j].innerText+'</td>'; } body+='</tr>'; }
+  function money(v){ return "R$ "+(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  var data=(adminExp||[]).concat(manut||[]);
+  var q=(gv("expense-search")||"").toLowerCase();
+  var fm=gv("expense-month")||"", fdate=gv("expense-date")||"", fp=gv("expense-periodo")||"";
+  var fcs=getMultiVals("expense-cat"), fps=getMultiVals("expense-payment");
+  var filt=data.filter(function(e){
+    return !e.deleted
+      && (!q || (e.description||"").toLowerCase().indexOf(q)>=0 || (e.supplier||e.beneficiary||"").toLowerCase().indexOf(q)>=0)
+      && (!fm || e.month===fm)
+      && (!fcs.length || fcs.indexOf(e.category)>=0)
+      && (!fps.length || fps.indexOf(e.payment)>=0)
+      && (!fdate || (e.date||"").slice(0,10)===fdate)
+      && dentroDoPeriodo(e.date, fp);
+  });
+  if(!filt.length){ showToast("Nenhum lancamento no filtro atual",true); return; }
+  filt.sort(function(a,b){ return (a.date||"").localeCompare(b.date||""); });
+  var gM=filt.filter(function(e){ return _ehManutencao(e.category); });
+  var gA=filt.filter(function(e){ return !_ehManutencao(e.category); });
+  var tM=gM.reduce(function(x,e){return x+(e.value||0);},0);
+  var tA=gA.reduce(function(x,e){return x+(e.value||0);},0);
+  function linhas(list){
+    if(!list.length) return '<tr><td colspan="7" style="text-align:center;color:#999">Nenhum lancamento</td></tr>';
+    return list.map(function(e){
+      return '<tr><td>'+esc(fmtD(e.date))+'</td><td>'+esc(e.month||"")+'</td><td>'+esc(e.nfNumber||"--")+'</td>'
+        +'<td>'+esc(e.supplier||e.beneficiary||"--")+'</td>'
+        +'<td>'+esc(e.description||"")+'</td>'
+        +'<td>'+esc(CAT_UNI[e.category]||e.category||"")+'</td>'
+        +'<td style="text-align:right">'+money(e.value)+'</td>'
+        +'<td>'+esc(e.payment||"--")+'</td></tr>';
+    }).join("");
+  }
+  var thead='<tr><th>Data</th><th>Mes</th><th>NF</th><th>Benef./Fornecedor</th><th>Descricao</th><th>Categoria</th><th style="text-align:right">Valor</th><th>Pgto</th></tr>';
+  var byPay={}; filt.forEach(function(e){ var k=e.payment||"--"; byPay[k]=(byPay[k]||0)+(e.value||0); });
+  var payRows=Object.keys(byPay).sort().map(function(k){ return '<tr><td>'+esc(k)+'</td><td style="text-align:right">'+money(byPay[k])+'</td></tr>'; }).join("");
+  var fmn=fm||"Todos", fca=fcs.length?fcs.map(function(k){return CAT_UNI[k]||k;}).join(", "):"Todas", fpay=fps.length?fps.join(", "):"Todos";
   var w=window.open('','_blank'); if(!w){ showToast('Permita pop-ups para imprimir',true); return; }
-  w.document.write('<html><head><meta charset="utf-8"><title>Relatorio de Despesas - TRANSCCEMA</title><style>body{font-family:Arial,Helvetica,sans-serif;padding:20px;color:#111}h1{font-size:17px;margin:0 0 4px}.meta{font-size:12px;color:#555;margin-bottom:12px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:5px 7px;font-size:11px;text-align:left}th{background:#f3f3f3}</style></head><body>');
-  w.document.write('<h1>TRANSCCEMA - '+tab+'</h1>');
-  w.document.write('<div class="meta">Filtros: mes='+fmn+' | categoria='+fca+' | pagamento='+fpay+' &nbsp;|&nbsp; '+count+' &nbsp;|&nbsp; <b>Total: '+total+'</b><br>Emitido em '+new Date().toLocaleString('pt-BR')+'</div>');
-  w.document.write('<table><thead>'+head+'</thead><tbody>'+body+'</tbody></table>'); w.document.write('</body></html>'); w.document.close();
+  var css='body{font-family:Arial,Helvetica,sans-serif;padding:20px;color:#111}h1{font-size:17px;margin:0 0 2px}h2{font-size:14px;margin:18px 0 6px;border-bottom:2px solid #333;padding-bottom:3px}.meta{font-size:12px;color:#555;margin-bottom:10px}table{width:100%;border-collapse:collapse;margin-bottom:4px}th,td{border:1px solid #ccc;padding:5px 7px;font-size:11px;text-align:left}th{background:#f3f3f3}.sub{font-weight:700;text-align:right;font-size:12px;margin:2px 0 8px}.tot{font-weight:800;font-size:15px;margin-top:10px;border-top:2px solid #333;padding-top:8px;text-align:right}';
+  w.document.write('<html><head><meta charset="utf-8"><title>Relatorio de Despesas - TRANSCCEMA</title><style>'+css+'</style></head><body>');
+  w.document.write('<h1>TRANSCCEMA - Relatorio de Despesas</h1>');
+  w.document.write('<div class="meta">Filtros: mes='+esc(fmn)+' | categoria='+esc(fca)+' | pagamento='+esc(fpay)+(fdate?' | data='+esc(fdate):'')+' &nbsp;|&nbsp; '+filt.length+' lancamentos<br>Emitido em '+new Date().toLocaleString('pt-BR')+'</div>');
+  w.document.write('<h2>Manutencao / Pecas / Servicos</h2><table><thead>'+thead+'</thead><tbody>'+linhas(gM)+'</tbody></table><div class="sub">Subtotal Manutencao/Pecas/Servicos: '+money(tM)+'</div>');
+  w.document.write('<h2>Administrativo</h2><table><thead>'+thead+'</thead><tbody>'+linhas(gA)+'</tbody></table><div class="sub">Subtotal Administrativo: '+money(tA)+'</div>');
+  w.document.write('<h2>Por Forma de Pagamento</h2><table><thead><tr><th>Pagamento</th><th style="text-align:right">Valor</th></tr></thead><tbody>'+payRows+'</tbody></table>');
+  w.document.write('<div class="tot">TOTAL GERAL: '+money(tM+tA)+'</div>');
+  w.document.write('</body></html>'); w.document.close();
   setTimeout(function(){ w.focus(); w.print(); }, 350);
 }
 function renderExpenses() {
@@ -2636,12 +2677,13 @@ function renderExpenses() {
   var cats = CAT_UNI;
   var cc = CC_UNI;
   var q = (gv("expense-search")||"").toLowerCase(), fm = gv("expense-month")||"", fc = gv("expense-cat")||"";
-  var fp = gv("expense-periodo")||""; var fpay = gv("expense-payment")||""; var fdate = gv("expense-date")||"";
+  var fp = gv("expense-periodo")||""; var fpays = getMultiVals("expense-payment"); var fcats = getMultiVals("expense-cat"); var fdate = gv("expense-date")||"";
   var filtered = data.filter(function(e){
     return !e.deleted
       && (!q || (e.description||"").toLowerCase().indexOf(q)>=0 || (e.supplier||e.beneficiary||"").toLowerCase().indexOf(q)>=0)
-      && (!fm || e.month===fm) && (!fc || e.category===fc)
-      && (!fpay || e.payment===fpay)
+      && (!fm || e.month===fm)
+      && (!fcats.length || fcats.indexOf(e.category)>=0)
+      && (!fpays.length || fpays.indexOf(e.payment)>=0)
       && (!fdate || (e.date||"").slice(0,10)===fdate)
       && dentroDoPeriodo(e.date, fp);
   });
@@ -5292,7 +5334,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 49 - CONFERENCIA E RELATORIO FORNECEDOR</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 50 - RELATORIO SEPARADO + FILTRO MULTIPLO</div>
   </div>
 </div>
 </body></html>
