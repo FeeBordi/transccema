@@ -22,6 +22,19 @@ a{text-decoration:none;color:inherit}button{font-family:inherit}
 .logo-name{font-size:17px;font-weight:800;letter-spacing:.02em}
 .logo-sub{font-size:9px;color:var(--mu);letter-spacing:.1em;text-transform:uppercase}
 #menu-list{flex:1;padding:8px 0;display:flex;flex-direction:column}
+.mdd{position:relative;display:inline-block}
+.mdd-btn{background:var(--s2);border:1px solid var(--bd);color:var(--tx);border-radius:7px;padding:8px 12px;font-size:12px;cursor:pointer;min-width:150px;display:flex;justify-content:space-between;gap:8px;align-items:center;font-family:inherit}
+.mdd-btn:hover{border-color:var(--acc)}
+.mdd-badge{background:var(--acc);color:#fff;border-radius:10px;padding:1px 7px;font-size:10.5px;font-weight:700;margin-left:4px}
+.mdd-panel{display:none;position:absolute;top:106%;left:0;background:var(--s1);border:1px solid var(--bd);border-radius:9px;padding:8px;min-width:240px;max-height:260px;overflow:auto;box-shadow:0 12px 34px rgba(0,0,0,.55);z-index:60}
+.mdd-panel.open{display:block}
+.mdd-ck{display:flex;align-items:center;gap:9px;color:var(--m2);font-size:12.5px;padding:5px 7px;border-radius:6px;cursor:pointer;user-select:none}
+.mdd-ck:hover{background:var(--s2)}
+.mdd-ck.on{color:var(--tx)}
+.mdd-box{width:16px;height:16px;border-radius:4px;border:1.5px solid var(--bd);background:var(--s2);display:flex;align-items:center;justify-content:center;flex:none;font-size:11px;color:#fff;line-height:1}
+.mdd-ck.on .mdd-box{background:var(--acc);border-color:var(--acc)}
+.mdd-clear{border-top:1px solid var(--bd);margin-top:6px;padding-top:7px;color:var(--mu);font-size:11.5px;cursor:pointer;text-align:center}
+.fchip{display:inline-flex;align-items:center;gap:6px;background:var(--acc);color:#fff;border-radius:20px;padding:4px 11px;font-size:11.5px;font-weight:600;cursor:pointer}
 .mitem{display:flex;align-items:center;gap:10px;padding:11px 16px;cursor:pointer;border-left:3px solid transparent;color:var(--m2);font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;transition:all .15s}
 #sb.slim .mitem{justify-content:center;padding:10px 0}
 #sb.slim .mitem-label,.mitem-badge{display:none}
@@ -280,9 +293,10 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
             <option value="ano">Este ano</option>
           </select>
           <select id="expense-month" class="form-select" style="width:auto;padding:8px 12px;font-size:12px" onchange="renderExpenses()"></select>
-          <select id="expense-cat" class="form-select" multiple size="3" title="Segure Ctrl para escolher varias" style="width:auto;min-width:150px;padding:6px 10px;font-size:12px" onchange="renderExpenses()"></select>
-          <select id="expense-payment" class="form-select" multiple size="3" title="Segure Ctrl para escolher varios" style="width:auto;min-width:150px;padding:6px 10px;font-size:12px" onchange="renderExpenses()"></select>
+          <div class="mdd" id="mdd-cat"><button type="button" class="mdd-btn" onclick="toggleMdd('cat')"><span>Categoria <span class="mdd-badge" id="mdd-cat-badge" style="display:none">0</span></span><span>&#9662;</span></button><div class="mdd-panel" id="mdd-cat-panel"></div></div>
+          <div class="mdd" id="mdd-pay"><button type="button" class="mdd-btn" onclick="toggleMdd('pay')"><span>Pagamento <span class="mdd-badge" id="mdd-pay-badge" style="display:none">0</span></span><span>&#9662;</span></button><div class="mdd-panel" id="mdd-pay-panel"></div></div>
           <input id="expense-date" type="date" class="form-input" style="width:auto;padding:7px 10px;font-size:12px" onchange="renderExpenses()" title="Filtrar por data especifica">
+          <div id="expense-chips" style="display:none;flex-basis:100%;display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"></div>
         </div>
         <button class="btn btn-g" onclick="printConsolidatedReport()" style="margin-right:8px">&#128424; Consolidado</button><button class="btn btn-g" onclick="printExpensesReport()" style="margin-right:8px">&#128424; Imprimir</button><button class="btn btn-p" id="expense-add-btn" onclick="openExpenseModal()">+ Lancar</button>
       </div>
@@ -546,6 +560,19 @@ a{text-decoration:none;color:inherit}button{font-family:inherit}
 .logo-name{font-size:17px;font-weight:800;letter-spacing:.02em}
 .logo-sub{font-size:9px;color:var(--mu);letter-spacing:.1em;text-transform:uppercase}
 #menu-list{flex:1;padding:8px 0;display:flex;flex-direction:column}
+.mdd{position:relative;display:inline-block}
+.mdd-btn{background:var(--s2);border:1px solid var(--bd);color:var(--tx);border-radius:7px;padding:8px 12px;font-size:12px;cursor:pointer;min-width:150px;display:flex;justify-content:space-between;gap:8px;align-items:center;font-family:inherit}
+.mdd-btn:hover{border-color:var(--acc)}
+.mdd-badge{background:var(--acc);color:#fff;border-radius:10px;padding:1px 7px;font-size:10.5px;font-weight:700;margin-left:4px}
+.mdd-panel{display:none;position:absolute;top:106%;left:0;background:var(--s1);border:1px solid var(--bd);border-radius:9px;padding:8px;min-width:240px;max-height:260px;overflow:auto;box-shadow:0 12px 34px rgba(0,0,0,.55);z-index:60}
+.mdd-panel.open{display:block}
+.mdd-ck{display:flex;align-items:center;gap:9px;color:var(--m2);font-size:12.5px;padding:5px 7px;border-radius:6px;cursor:pointer;user-select:none}
+.mdd-ck:hover{background:var(--s2)}
+.mdd-ck.on{color:var(--tx)}
+.mdd-box{width:16px;height:16px;border-radius:4px;border:1.5px solid var(--bd);background:var(--s2);display:flex;align-items:center;justify-content:center;flex:none;font-size:11px;color:#fff;line-height:1}
+.mdd-ck.on .mdd-box{background:var(--acc);border-color:var(--acc)}
+.mdd-clear{border-top:1px solid var(--bd);margin-top:6px;padding-top:7px;color:var(--mu);font-size:11.5px;cursor:pointer;text-align:center}
+.fchip{display:inline-flex;align-items:center;gap:6px;background:var(--acc);color:#fff;border-radius:20px;padding:4px 11px;font-size:11.5px;font-weight:600;cursor:pointer}
 .mitem{display:flex;align-items:center;gap:10px;padding:11px 16px;cursor:pointer;border-left:3px solid transparent;color:var(--m2);font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;transition:all .15s}
 #sb.slim .mitem{justify-content:center;padding:10px 0}
 #sb.slim .mitem-label,.mitem-badge{display:none}
@@ -802,9 +829,10 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
             <option value="ano">Este ano</option>
           </select>
           <select id="expense-month" class="form-select" style="width:auto;padding:8px 12px;font-size:12px" onchange="renderExpenses()"></select>
-          <select id="expense-cat" class="form-select" multiple size="3" title="Segure Ctrl para escolher varias" style="width:auto;min-width:150px;padding:6px 10px;font-size:12px" onchange="renderExpenses()"></select>
-          <select id="expense-payment" class="form-select" multiple size="3" title="Segure Ctrl para escolher varios" style="width:auto;min-width:150px;padding:6px 10px;font-size:12px" onchange="renderExpenses()"></select>
+          <div class="mdd" id="mdd-cat"><button type="button" class="mdd-btn" onclick="toggleMdd('cat')"><span>Categoria <span class="mdd-badge" id="mdd-cat-badge" style="display:none">0</span></span><span>&#9662;</span></button><div class="mdd-panel" id="mdd-cat-panel"></div></div>
+          <div class="mdd" id="mdd-pay"><button type="button" class="mdd-btn" onclick="toggleMdd('pay')"><span>Pagamento <span class="mdd-badge" id="mdd-pay-badge" style="display:none">0</span></span><span>&#9662;</span></button><div class="mdd-panel" id="mdd-pay-panel"></div></div>
           <input id="expense-date" type="date" class="form-input" style="width:auto;padding:7px 10px;font-size:12px" onchange="renderExpenses()" title="Filtrar por data especifica">
+          <div id="expense-chips" style="display:none;flex-basis:100%;display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"></div>
         </div>
         <button class="btn btn-g" onclick="printConsolidatedReport()" style="margin-right:8px">&#128424; Consolidado</button><button class="btn btn-g" onclick="printExpensesReport()" style="margin-right:8px">&#128424; Imprimir</button><button class="btn btn-p" id="expense-add-btn" onclick="openExpenseModal()">+ Lancar</button>
       </div>
@@ -2499,10 +2527,49 @@ function buildExpenseTabs() {
   var et=ge("expense-tabs"); if(et) et.innerHTML="";
 }
 function switchExpTab(t) { expenseTab = t; buildExpenseTabs(); buildExpenseFilters(); renderExpenses(); }
+var MDD = {cat:[], pay:[]};
 function getMultiVals(id){
-  var el=ge(id); if(!el) return [];
-  if(el.multiple){ var out=[]; for(var i=0;i<el.options.length;i++){ if(el.options[i].selected && el.options[i].value) out.push(el.options[i].value); } return out; }
-  return el.value?[el.value]:[];
+  if(id==="expense-cat") return MDD.cat.slice();
+  if(id==="expense-payment") return MDD.pay.slice();
+  var el=ge(id); return (el&&el.value)?[el.value]:[];
+}
+function toggleMdd(kind){
+  var p=ge("mdd-"+kind+"-panel"); if(!p) return;
+  var abrir=!p.classList.contains("open");
+  var todos=document.querySelectorAll(".mdd-panel");
+  for(var i=0;i<todos.length;i++) todos[i].classList.remove("open");
+  if(abrir) p.classList.add("open");
+}
+document.addEventListener("click", function(e){
+  if(e.target.closest && e.target.closest(".mdd")) return;
+  var todos=document.querySelectorAll(".mdd-panel");
+  for(var i=0;i<todos.length;i++) todos[i].classList.remove("open");
+});
+function mddToggleItem(kind, val){
+  var arr=MDD[kind], i=arr.indexOf(val);
+  if(i>=0) arr.splice(i,1); else arr.push(val);
+  buildExpenseFilters(); renderExpenses();
+}
+function mddClear(kind){ MDD[kind]=[]; buildExpenseFilters(); renderExpenses(); }
+function _mddPanel(kind, opcoes, rotulos){
+  var p=ge("mdd-"+kind+"-panel"); if(!p) return;
+  var sel=MDD[kind];
+  p.innerHTML = (opcoes.length?opcoes.map(function(v){
+    var on=sel.indexOf(v)>=0;
+    return '<div class="mdd-ck'+(on?" on":"")+'" onclick="mddToggleItem(\''+kind+'\',\''+String(v).replace(/'/g,"\\'")+'\')">'
+      +'<span class="mdd-box">'+(on?"&#10003;":"")+'</span>'+esc(rotulos[v]||v)+'</div>';
+  }).join(""):'<div style="color:var(--mu);font-size:12px;padding:6px">Nenhuma opcao</div>')
+  + (sel.length?'<div class="mdd-clear" onclick="mddClear(\''+kind+'\')">limpar selecao</div>':'');
+  var b=ge("mdd-"+kind+"-badge");
+  if(b){ b.textContent=sel.length; b.style.display=sel.length?"":"none"; }
+}
+function _mddChips(rotCat){
+  var box=ge("expense-chips"); if(!box) return;
+  var html="";
+  MDD.cat.forEach(function(v){ html+='<span class="fchip" onclick="mddToggleItem(\'cat\',\''+String(v).replace(/'/g,"\\'")+'\')">'+esc(rotCat[v]||v)+' &times;</span>'; });
+  MDD.pay.forEach(function(v){ html+='<span class="fchip" style="background:var(--blu)" onclick="mddToggleItem(\'pay\',\''+String(v).replace(/'/g,"\\'")+'\')">'+esc(v)+' &times;</span>'; });
+  box.innerHTML=html;
+  box.style.display = html ? "flex" : "none";
 }
 function buildExpenseFilters() {
   buildExpenseTabs();
@@ -2510,18 +2577,17 @@ function buildExpenseFilters() {
   var cats = CAT_UNI;
   var months = [];
   data.forEach(function(e){ if(months.indexOf(e.month)<0) months.push(e.month); });
-  var em = ge("expense-month"), ec = ge("expense-cat");
-  var cm = em ? em.value : "", cc = ec ? ec.value : "";
+  var em = ge("expense-month");
+  var cm = em ? em.value : "";
   if (em) { em.innerHTML = '<option value="">Todos os meses</option>' + months.map(function(m){return '<option value="'+m+'"'+(cm===m?" selected":"")+'>'+m+'</option>';}).join(""); }
-  if (ec) { var _sel=getMultiVals("expense-cat"); ec.innerHTML = (ec.multiple?"":'<option value="">Todas categorias</option>') + Object.keys(cats).map(function(k){return '<option value="'+k+'"'+((_sel.indexOf(k)>=0||cc===k)?" selected":"")+'>'+cats[k]+'</option>';}).join(""); }
-  var ep = ge("expense-payment"); var cp = ep ? ep.value : "";
-  if (ep) {
-    var pgs = [];
-    data.forEach(function(e){ var pv = e.payment||""; if (pv && pgs.indexOf(pv)<0) pgs.push(pv); });
-    pgs.sort();
-    var _selp=getMultiVals("expense-payment");
-    ep.innerHTML = (ep.multiple?"":'<option value="">Todos pagamentos</option>') + pgs.map(function(pv){return '<option value="'+pv+'"'+((_selp.indexOf(pv)>=0||cp===pv)?" selected":"")+'>'+pv+'</option>';}).join("");
-  }
+  _mddPanel("cat", Object.keys(cats), cats);
+  var pgs=[]; data.forEach(function(e){ var pv=e.payment||""; if(pv && pgs.indexOf(pv)<0) pgs.push(pv); });
+  PAY_UNI.forEach(function(pv){ if(pgs.indexOf(pv)<0) pgs.push(pv); });
+  pgs.sort();
+  var _rot={}; pgs.forEach(function(pv){ _rot[pv]=pv; });
+  _mddPanel("pay", pgs, _rot);
+  _mddChips(cats);
+
   var btn = ge("expense-add-btn"); if (btn) btn.textContent = "+ Lancar Despesa";
   var tn = ge("th-nf"), ts = ge("th-sup"); if(tn) tn.textContent="NF"; if(ts) ts.textContent="Fornec./Benef.";
 }
@@ -2676,7 +2742,7 @@ function renderExpenses() {
   var data = (adminExp||[]).concat(manut||[]);
   var cats = CAT_UNI;
   var cc = CC_UNI;
-  var q = (gv("expense-search")||"").toLowerCase(), fm = gv("expense-month")||"", fc = gv("expense-cat")||"";
+  var q = (gv("expense-search")||"").toLowerCase(), fm = gv("expense-month")||"";
   var fp = gv("expense-periodo")||""; var fpays = getMultiVals("expense-payment"); var fcats = getMultiVals("expense-cat"); var fdate = gv("expense-date")||"";
   var filtered = data.filter(function(e){
     return !e.deleted
@@ -5334,7 +5400,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 50 - RELATORIO SEPARADO + FILTRO MULTIPLO</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 51 - FILTROS COM QUADRADINHOS</div>
   </div>
 </div>
 </body></html>
