@@ -1725,12 +1725,12 @@ function renderDashboard() {
   var _dm = ge("dash-month");
   if(_dm && !_dm.dataset.built){ _dm.innerHTML='<option value="">Todos os meses</option>'+MONTHS.map(function(m){return '<option value="'+m+'">'+m+'</option>';}).join(''); _dm.dataset.built="1"; }
   var fMes = _dm ? _dm.value : "";
-  var manutF = fMes ? manut.filter(function(e){return e.month===fMes;}) : manut;
-  var adminF = fMes ? adminExp.filter(function(e){return e.month===fMes;}) : adminExp;
+  var manutF = manut.filter(function(e){ return !e.deleted && (!fMes || e.month===fMes); });
+  var adminF = adminExp.filter(function(e){ return !e.deleted && (!fMes || e.month===fMes); });
   var tM = manutF.reduce(function(s,e){return s+(e.value||0);},0);
   var tA = adminF.reduce(function(s,e){return s+(e.value||0);},0);
   var _lastIdx = new Date().getMonth();
-  for (var _mi=0; _mi<12; _mi++){ var _mm=MONTHS[_mi]; if((_mi>_lastIdx) && (manut.some(function(e){return e.month===_mm;})||adminExp.some(function(e){return e.month===_mm;}))) _lastIdx=_mi; }
+  for (var _mi=0; _mi<12; _mi++){ var _mm=MONTHS[_mi]; if((_mi>_lastIdx) && (manut.some(function(e){return !e.deleted && e.month===_mm;})||adminExp.some(function(e){return !e.deleted && e.month===_mm;}))) _lastIdx=_mi; }
   if(!window._fuelFetchedSession){ window._fuelFetchedSession=true; carregarCombustivel(); }
   var fuelCard = fMes ? (fuelByMonth[fMes]||0) : (fuelTotal||0);
   var tG = tM + tA + fuelCard;
@@ -1760,8 +1760,8 @@ function renderDashboard() {
   for (var i = 0; i <= _lastIdx; i++) {
     var m = MONTHS[i];
     labels.push(m.slice(0,3));
-    var mv = 0; manut.forEach(function(e){ if(e.month===m) mv+=e.value; });
-    var av = 0; adminExp.forEach(function(e){ if(e.month===m) av+=e.value; });
+    var mv = 0; manut.forEach(function(e){ if(!e.deleted && e.month===m) mv+=e.value; });
+    var av = 0; adminExp.forEach(function(e){ if(!e.deleted && e.month===m) av+=e.value; });
     mVals.push(mv); aVals.push(av);
   }
 
@@ -2675,8 +2675,8 @@ function updateManutPayment(){
 function printConsolidatedReport(){
   var fmn=gv("expense-month")||"";
   function money(v){ return "R$ "+(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
-  var adm=adminExp.filter(function(e){return !fmn||e.month===fmn;}).map(function(e){return {date:e.date||"",cat:(CAT_ADM[e.category]||e.category||""),desc:e.description||e.beneficiary||"",pay:e.payment||"--",val:e.value||0};});
-  var mex=manut.filter(function(e){return e.manutTipo==="Externa"&&(!fmn||e.month===fmn);}).map(function(e){return {date:e.date||"",cat:(CAT_MAN[e.category]||e.category||""),desc:(e.supplier?e.supplier+" - ":"")+(e.description||""),pay:e.payment||"--",val:e.value||0};});
+  var adm=adminExp.filter(function(e){return !e.deleted && (!fmn||e.month===fmn);}).map(function(e){return {date:e.date||"",cat:(CAT_ADM[e.category]||e.category||""),desc:e.description||e.beneficiary||"",pay:e.payment||"--",val:e.value||0};});
+  var mex=manut.filter(function(e){return !e.deleted && e.manutTipo==="Externa"&&(!fmn||e.month===fmn);}).map(function(e){return {date:e.date||"",cat:(CAT_MAN[e.category]||e.category||""),desc:(e.supplier?e.supplier+" - ":"")+(e.description||""),pay:e.payment||"--",val:e.value||0};});
   if(!adm.length && !mex.length){ showToast("Sem lancamentos para o consolidado",true); return; }
   adm.sort(function(a,b){return (a.date||"").localeCompare(b.date||"");});
   mex.sort(function(a,b){return (a.date||"").localeCompare(b.date||"");});
@@ -2699,14 +2699,15 @@ function printConsolidatedReport(){
 }
 function printCostReport(){
   function money(v){ return "R$ "+(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
-  var tM=manut.reduce(function(s,e){return s+(e.value||0);},0);
-  var tA=adminExp.reduce(function(s,e){return s+(e.value||0);},0);
+  var _mAtiv=manut.filter(function(e){return !e.deleted;}), _aAtiv=adminExp.filter(function(e){return !e.deleted;});
+  var tM=_mAtiv.reduce(function(s,e){return s+(e.value||0);},0);
+  var tA=_aAtiv.reduce(function(s,e){return s+(e.value||0);},0);
   var tG=tM+tA;
   var mesRows='';
   for(var i=0;i<MONTHS.length;i++){
     var m=MONTHS[i], mv=0, av=0;
-    manut.forEach(function(e){if(e.month===m)mv+=e.value||0;});
-    adminExp.forEach(function(e){if(e.month===m)av+=e.value||0;});
+    _mAtiv.forEach(function(e){if(e.month===m)mv+=e.value||0;});
+    _aAtiv.forEach(function(e){if(e.month===m)av+=e.value||0;});
     if(mv||av) mesRows+='<tr><td>'+m+'</td><td style="text-align:right">'+money(mv)+'</td><td style="text-align:right">'+money(av)+'</td><td style="text-align:right"><b>'+money(mv+av)+'</b></td></tr>';
   }
   function catRows(list, catMap){
@@ -2714,11 +2715,11 @@ function printCostReport(){
     var arr=Object.keys(mp).map(function(k){return {n:(catMap[k]||k), v:mp[k]};}); arr.sort(function(a,b){return b.v-a.v;});
     return arr.map(function(x){return '<tr><td>'+x.n+'</td><td style="text-align:right">'+money(x.v)+'</td></tr>';}).join('') || '<tr><td colspan="2" style="text-align:center;color:#999">Nenhum</td></tr>';
   }
-  var supMap={}; manut.forEach(function(e){var n=e.supplier||'(sem fornecedor)'; supMap[n]=(supMap[n]||0)+(e.value||0);});
+  var supMap={}; _mAtiv.forEach(function(e){var n=e.supplier||'(sem fornecedor)'; supMap[n]=(supMap[n]||0)+(e.value||0);});
   var supArr=Object.keys(supMap).map(function(n){return {n:n,v:supMap[n]};}); supArr.sort(function(a,b){return b.v-a.v;});
   var supRows=supArr.map(function(x){return '<tr><td>'+x.n+'</td><td style="text-align:right">'+money(x.v)+'</td></tr>';}).join('') || '<tr><td colspan="2" style="text-align:center;color:#999">Nenhum</td></tr>';
-  function catMapForMonth(mm){ var mp={}; manut.forEach(function(e){ if(e.month===mm){ var k='Manut: '+(CAT_MAN[e.category]||e.category||'Outros'); mp[k]=(mp[k]||0)+(e.value||0); } }); adminExp.forEach(function(e){ if(e.month===mm){ var k='Adm: '+(CAT_ADM[e.category]||e.category||'Outros'); mp[k]=(mp[k]||0)+(e.value||0); } }); return mp; }
-  var monthsWithData=[]; MONTHS.forEach(function(mm){ var mv=0,av=0; manut.forEach(function(e){if(e.month===mm)mv+=e.value||0;}); adminExp.forEach(function(e){if(e.month===mm)av+=e.value||0;}); if(mv||av) monthsWithData.push({m:mm,total:mv+av}); });
+  function catMapForMonth(mm){ var mp={}; _mAtiv.forEach(function(e){ if(e.month===mm){ var k='Manut: '+(CAT_MAN[e.category]||e.category||'Outros'); mp[k]=(mp[k]||0)+(e.value||0); } }); _aAtiv.forEach(function(e){ if(e.month===mm){ var k='Adm: '+(CAT_ADM[e.category]||e.category||'Outros'); mp[k]=(mp[k]||0)+(e.value||0); } }); return mp; }
+  var monthsWithData=[]; MONTHS.forEach(function(mm){ var mv=0,av=0; _mAtiv.forEach(function(e){if(e.month===mm)mv+=e.value||0;}); _aAtiv.forEach(function(e){if(e.month===mm)av+=e.value||0;}); if(mv||av) monthsWithData.push({m:mm,total:mv+av}); });
   var compRows='';
   for(var ci=1; ci<monthsWithData.length; ci++){
     var cur=monthsWithData[ci], prev=monthsWithData[ci-1];
@@ -5476,7 +5477,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 52 - CARDS CLICAVEIS COM DETALHE</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 53 - VALORES CORRIGIDOS</div>
   </div>
 </div>
 </body></html>
