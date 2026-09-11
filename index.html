@@ -3218,6 +3218,7 @@ function pushToServer(callback) {
     });
     if (merged.almoxNovos) { var _m={}; almoxItems.forEach(function(x){ if(x&&x.id!=null) _m[x.id]=1; });
       merged.almoxNovos.forEach(function(it){ if(it && it.id!=null && !_m[it.id]){ _m[it.id]=1; almoxItems.push(it); } }); }
+    consolidarDuplicatas();
     saveLocalOnly();
 
     // 4. Envia para o Sheets
@@ -3540,6 +3541,7 @@ unpackData = function(obj) {
     if (temNovos) obj.almoxNovos.forEach(function(it){ if (it && it.id != null) novosMap[it.id] = it; });
     var _ex={}; almoxItems.forEach(function(x){ if(x&&x.id!=null) _ex[x.id]=1; });
     Object.keys(novosMap).forEach(function(id){ if(!_ex[id]) almoxItems.push(novosMap[id]); });
+    consolidarDuplicatas();
   }
   if (obj.almoxMovs) almoxMovs = obj.almoxMovs;
   saveLocalOnly();
@@ -3576,7 +3578,35 @@ function switchAlmoxLocal(loc){
   if(ba) ba.className = "btn "+(loc==="BA"?"btn-p":"btn-g");
   renderAlmox();
 }
+var DUP_GRUPOS = [{"p":"alm121","s":["alm548"]},{"p":"alm122","s":["alm549"]},{"p":"alm265","s":["alm299"]},{"p":"alm604","s":["alm290"]},{"p":"alm316","s":["alm300"]},{"p":"alm335","s":["alm765"]},{"p":"alm336","s":["alm515"]},{"p":"alm337","s":["alm466"]},{"p":"alm372","s":["alm780"]},{"p":"alm608","s":["alm413"]},{"p":"alm609","s":["alm414"]},{"p":"alm750","s":["alm416"]},{"p":"alm425","s":["alm468"]},{"p":"alm788","s":["alm426"]},{"p":"alm429","s":["alm779"]},{"p":"alm560","s":["alm434"]},{"p":"alm559","s":["alm435"]},{"p":"alm703","s":["alm469"]},{"p":"alm764","s":["alm498"]},{"p":"alm499","s":["alm830"]},{"p":"alm524","s":["alm699"]},{"p":"alm525","s":["alm700"]},{"p":"alm526","s":["alm547"]},{"p":"alm704","s":["alm537"]},{"p":"alm832","s":["alm542"]},{"p":"alm814","s":["alm543"]},{"p":"alm813","s":["alm544"]},{"p":"alm545","s":["alm718"]},{"p":"alm761","s":["alm546"]},{"p":"alm828","s":["alm597"]},{"p":"alm602","s":["alm618"]},{"p":"alm603","s":["alm781"]},{"p":"alm768","s":["alm605"]},{"p":"alm636","s":["alm607"]},{"p":"alm800","s":["alm611"]},{"p":"alm789","s":["alm633"]},{"p":"alm827","s":["alm635"]},{"p":"alm783","s":["alm748"]},{"p":"alm749","s":["alm823"]},{"p":"alm778","s":["alm821"]}];
+var DUP_SEC = (function(){ var m={}; DUP_GRUPOS.forEach(function(g){ g.s.forEach(function(id){ m[id]=g.p; }); }); return m; })();
+function consolidarDuplicatas(){
+  if(!window.almoxItems || !almoxItems.length) return;
+  var jaFeito = false;
+  try { jaFeito = localStorage.getItem("tc_dedup_base") === "1"; } catch(e){}
+  var porId = {}; almoxItems.forEach(function(it){ if(it && it.id!=null) porId[it.id]=it; });
+  var somou = 0;
+  DUP_GRUPOS.forEach(function(g){
+    var prim = porId[g.p]; if(!prim) return;
+    var extra = 0;
+    g.s.forEach(function(sid){
+      var sec = porId[sid]; if(!sec) return;
+      if(!jaFeito && !sec.deleted) extra += (parseInt(sec.saldo,10)||0);
+      sec.deleted = true; sec.saldo = 0; sec.valorEstoque = 0;
+      sec.updatedAt = (typeof bumpTs==="function") ? bumpTs(sec) : Date.now();
+    });
+    if(extra > 0){
+      prim.saldo = (parseInt(prim.saldo,10)||0) + extra;
+      prim.valorEstoque = Math.round(prim.saldo * (prim.custoMedio||0) * 100)/100;
+      prim.updatedAt = (typeof bumpTs==="function") ? bumpTs(prim) : Date.now();
+      somou++;
+    }
+  });
+  try { localStorage.setItem("tc_dedup_base","1"); } catch(e){}
+  return somou;
+}
 function renderAlmox() {
+  if(!window._dedupRun){ window._dedupRun=true; consolidarDuplicatas(); saveAll(); }
   var q = (ge("alm-q") ? ge("alm-q").value : "").toLowerCase();
   var f = ge("alm-f") ? ge("alm-f").value : "all";
   var fil = almoxItems.filter(function(i) {
@@ -3688,7 +3718,7 @@ function deleteMov(id) {
     var delta = mov.tipo==="entrada" ? -mov.qtd : mov.qtd;
     almoxItems = almoxItems.map(function(item) {
       if (item.id !== mov.itemId) return item;
-      return Object.assign({}, item, {saldo: Math.max(0, item.saldo+delta)});
+      return Object.assign({}, item, {saldo: Math.max(0, item.saldo+delta), valorEstoque: Math.round(Math.max(0, item.saldo+delta) * (item.custoMedio||0) * 100)/100, updatedAt: bumpTs(item)});
     });
   }
   almoxMovs = almoxMovs.filter(function(m){return m.id!==id;});
@@ -4864,11 +4894,11 @@ function confirmarNovaOS() {
     almoxItems = almoxItems.map(function(item) {
       if (item.id !== p.itemId) return item;
       var ns = Math.max(0, item.saldo - p.qtd);
-      return Object.assign({}, item, {saldo: ns, valorEstoque: Math.round(ns * item.custoMedio * 100)/100});
+      return Object.assign({}, item, {saldo: ns, valorEstoque: Math.round(ns * item.custoMedio * 100)/100, updatedAt: bumpTs(item)});
     });
     // Registra movimentacao
     almoxMovs.unshift({
-      id: uid(), tipo: "saida", itemId: p.itemId,
+      id: uid(), updatedAt: Date.now(), local: "SP", tipo: "saida", itemId: p.itemId,
       produto: p.produto, unidade: p.unidade, qtd: p.qtd,
       placa: placa, responsavel: mec,
       descricao: desc.slice(0,100) + (tipo===2 ? " | Empresa: "+empresa : ""),
@@ -5475,7 +5505,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 54 - ALMOX SALDOS CORRIGIDOS</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 56 - DUPLICADAS ELIMINADAS</div>
   </div>
 </div>
 </body></html>
