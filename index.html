@@ -3218,7 +3218,6 @@ function pushToServer(callback) {
     });
     if (merged.almoxNovos) { var _m={}; almoxItems.forEach(function(x){ if(x&&x.id!=null) _m[x.id]=1; });
       merged.almoxNovos.forEach(function(it){ if(it && it.id!=null && !_m[it.id]){ _m[it.id]=1; almoxItems.push(it); } }); }
-    almoxItems = almoxItems.filter(function(x){ return x && !x.deleted; });
     saveLocalOnly();
 
     // 4. Envia para o Sheets
@@ -3541,7 +3540,6 @@ unpackData = function(obj) {
     if (temNovos) obj.almoxNovos.forEach(function(it){ if (it && it.id != null) novosMap[it.id] = it; });
     var _ex={}; almoxItems.forEach(function(x){ if(x&&x.id!=null) _ex[x.id]=1; });
     Object.keys(novosMap).forEach(function(id){ if(!_ex[id]) almoxItems.push(novosMap[id]); });
-    almoxItems = almoxItems.filter(function(x){ return x && !x.deleted; });
   }
   if (obj.almoxMovs) almoxMovs = obj.almoxMovs;
   saveLocalOnly();
@@ -5477,7 +5475,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 53 - VALORES CORRIGIDOS</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 54 - ALMOX SALDOS CORRIGIDOS</div>
   </div>
 </div>
 </body></html>
