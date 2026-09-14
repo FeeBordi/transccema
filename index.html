@@ -3579,11 +3579,44 @@ function switchAlmoxLocal(loc){
 var DUP_GRUPOS = [{"p":"alm121","s":["alm548"],"t":88,"n":"Fusível Lamina Automotivo 05 Amperes","u":"Un","c":0.88},{"p":"alm122","s":["alm549"],"t":80,"n":"Fusível Lamina Automotivo 20 Amperes","u":"Un","c":1.2},{"p":"alm265","s":["alm299"],"t":10,"n":"Lanterna TeTo  L/D > L/E     AD0649  Axor","u":"Pç","c":18.0},{"p":"alm604","s":["alm290"],"t":8,"n":"Chicote Elétrico Espiral 5,5mts 7 Vias 2 Machos","u":"Un","c":214.26},{"p":"alm316","s":["alm300"],"t":12,"n":"Lanterna pé da carreta inferior branca AD0920","u":"Pç","c":110.89},{"p":"alm335","s":["alm765"],"t":12,"n":"Correia Micro V Gates 9PK2340","u":"Un","c":112.96},{"p":"alm336","s":["alm515"],"t":12,"n":"Correia 8KP1610","u":"Un","c":39.84},{"p":"alm337","s":["alm466"],"t":37,"n":"Sirene de Ré  Ref AD7004","u":"Un","c":21.27},{"p":"alm372","s":["alm780"],"t":2,"n":"Servo embreagem Elétrico MB","u":"Un","c":1253.73},{"p":"alm608","s":["alm413"],"t":6,"n":"Mangueira Espiral Amarela PA12 12X9X6,5","u":"Un","c":67.23},{"p":"alm609","s":["alm414"],"t":6,"n":"Mangueira Espiral Vermelha PA12 12X9X6,5","u":"Un","c":81.64},{"p":"alm750","s":["alm416"],"t":803,"n":"Oleo Lubrificante Motor 15W40","u":"L","c":12.82},{"p":"alm425","s":["alm468"],"t":4,"n":"Lente do farol principal lado esquerdo AD0847","u":"Un","c":71.91},{"p":"alm788","s":["alm426"],"t":127,"n":"Pneu Bridgestone R269 (liso)","u":"Un","c":2100.0},{"p":"alm429","s":["alm779"],"t":0,"n":"Pneu Bridgestone R249S","u":"Un","c":201.11},{"p":"alm560","s":["alm434"],"t":3,"n":"Mangueira Radiador Superior Axor 2036 A9585010782","u":"Pç","c":135.3},{"p":"alm559","s":["alm435"],"t":4,"n":"Mangueira Radiador Inferior Axor 2036 A9585010882","u":"Pç","c":89.04},{"p":"alm703","s":["alm469"],"t":5,"n":"Retrovisor Auxiliar MBB Axor AD803/0023","u":"Un","c":104.78},{"p":"alm764","s":["alm498"],"t":52,"n":"Lâmpada H3 24V Philips 13336ESC","u":"Un","c":10.26},{"p":"alm499","s":["alm830"],"t":92,"n":"Lâmpada H7 24V Philips 13972ESC","u":"Un","c":24.26},{"p":"alm524","s":["alm699"],"t":4,"n":"Retrovisor L/D MB Axor","u":"Un","c":266.0},{"p":"alm525","s":["alm700"],"t":4,"n":"Retrovisor  L/E MB Axor","u":"Pç","c":339.0},{"p":"alm526","s":["alm547"],"t":203,"n":"Fusível Lamina Automotivo 15 Amperes","u":"Un","c":0.63},{"p":"alm704","s":["alm537"],"t":9,"n":"Alternador 35/80 Amperes 28V","u":"Un","c":892.77},{"p":"alm832","s":["alm542"],"t":210,"n":"lampada R5W 24v 1 polo 1382111","u":"Pç","c":1.64},{"p":"alm814","s":["alm543"],"t":35,"n":"Filtro Separador  160J-10M-AQ11","u":"Un","c":63.47},{"p":"alm813","s":["alm544"],"t":38,"n":"Filtro Diesel Motor  PU999/1X MAN (KX80/1D MEHLE)","u":"Un","c":56.06},{"p":"alm545","s":["alm718"],"t":9,"n":"Filtro Separador  Actros  Parker RES-2006W","u":"Un","c":223.67},{"p":"alm761","s":["alm546"],"t":207,"n":"Fusível Lamina Automotivo 10 Amperes","u":"Un","c":0.56},{"p":"alm828","s":["alm597"],"t":64,"n":"Pneu Dunlop SP320","u":"Un","c":1872.0},{"p":"alm602","s":["alm618"],"t":42,"n":"Anel Vedação (borracha) pino patim MB A3029970445 Ref;000541 Mic","u":"Un","c":1.43},{"p":"alm603","s":["alm781"],"t":4,"n":"Tubo Arla Euro V REF:6954760501","u":"Pç","c":166.77},{"p":"alm768","s":["alm605"],"t":3,"n":"Válvula Secadora Recondicionada","u":"Pç","c":810.0},{"p":"alm636","s":["alm607"],"t":29,"n":"Catraca Freio da Carreta","u":"Un","c":54.0},{"p":"alm800","s":["alm611"],"t":5,"n":"Filtro Diesel  VW Ref:095157  MANN","u":"Pç","c":92.93},{"p":"alm789","s":["alm633"],"t":16,"n":"Pneu Goodyear KMAX-RSA","u":"Un","c":2021.0},{"p":"alm827","s":["alm635"],"t":100,"n":"Pneu Dunlop SP835","u":"Un","c":2208.0},{"p":"alm783","s":["alm748"],"t":17,"n":"Mola Pneumatica carreta ST 144","u":"Un","c":319.27},{"p":"alm749","s":["alm823"],"t":11,"n":"Bolsa Pneumática Trasão ST338","u":"Pç","c":584.33},{"p":"alm778","s":["alm821"],"t":5,"n":"Filtro Secadora Ar APU Actros Wabco 4329012512","u":"Pç","c":205.08}];
 var DUP_SEC = (function(){ var m={}; DUP_GRUPOS.forEach(function(g){ g.s.forEach(function(id){ m[id]=g.p; }); }); return m; })();
 function consolidarDuplicatas(){
-  // Desativada: nao altera saldos automaticamente.
-  // A juncao de duplicadas e feita so pelo botao "Limpar Duplicadas", com previa.
-  return 0;
+  if(!window.almoxItems || !almoxItems.length) return 0;
+  try { if(localStorage.getItem("tc_unif_dup")==="v61") return 0; } catch(e){}
+  var porId={}; almoxItems.forEach(function(it){ if(it&&it.id!=null) porId[it.id]=it; });
+  var stamp=function(o){ o.updatedAt=(typeof bumpTs==="function")?bumpTs(o):Date.now(); };
+
+  // Quantas movimentacoes cada cadastro teve (indica qual e o realmente usado)
+  var usos={};
+  (almoxMovs||[]).forEach(function(m){ if(m&&m.itemId!=null) usos[m.itemId]=(usos[m.itemId]||0)+1; });
+
+  var unificadas=0;
+  DUP_GRUPOS.forEach(function(g){
+    var ids=[g.p].concat(g.s||[]);
+    var membros=ids.map(function(id){ return porId[id]; }).filter(Boolean);
+    if(membros.length<2) return;
+
+    // Fica o cadastro mais usado; empate -> o mais antigo (id menor)
+    membros.sort(function(a,b){
+      var ua=usos[a.id]||0, ub=usos[b.id]||0;
+      if(ub!==ua) return ub-ua;
+      return String(a.id).localeCompare(String(b.id), undefined, {numeric:true});
+    });
+    var fica=membros[0];
+
+    // NAO soma e NAO inventa: mantem a quantidade do cadastro escolhido
+    if(fica.deleted){ fica.deleted=false; stamp(fica); }
+    membros.slice(1).forEach(function(x){
+      if(!x.deleted || (parseInt(x.saldo,10)||0)>0){
+        x.deleted=true; x.saldo=0; x.valorEstoque=0; stamp(x); 
+      }
+    });
+    unificadas++;
+  });
+  try { localStorage.setItem("tc_unif_dup","v61"); } catch(e){}
+  if(unificadas){ try{ saveAll(); }catch(e){} }
+  return unificadas;
 }
 function renderAlmox() {
+  if(!window._unifRun){ window._unifRun=true; consolidarDuplicatas(); }
   var q = (ge("alm-q") ? ge("alm-q").value : "").toLowerCase();
   var f = ge("alm-f") ? ge("alm-f").value : "all";
   var fil = almoxItems.filter(function(i) {
@@ -3962,21 +3995,25 @@ function conferirDuplicatas(){
     var membros=ids.map(function(id){return porId[id];}).filter(Boolean);
     if(!membros.length) return;
     var soma=membros.reduce(function(a,x){ return a + (x.deleted?0:(parseInt(x.saldo,10)||0)); },0);
+    var orig=(g.t||0);
+    var sugestao=orig;
+    var inflado=(soma>orig*2 && orig>0);
     var detalhe=membros.map(function(x){
       return (x.deleted?'<span style="color:var(--mu);text-decoration:line-through">':'<span>')+(parseInt(x.saldo,10)||0)+'</span>';
     }).join(' + ');
     linhas+='<tr>'
       +'<td style="padding:5px 7px;border-top:1px solid var(--bd);font-size:12px">'+esc(g.n||membros[0].produto)+'</td>'
-      +'<td style="padding:5px 7px;border-top:1px solid var(--bd);text-align:center;font-size:12px;color:var(--m2)">'+detalhe+'</td>'
-      +'<td style="padding:5px 7px;border-top:1px solid var(--bd);text-align:center"><input id="cd-q-'+idx+'" type="number" min="0" value="'+soma+'" style="width:72px;padding:4px 6px;font-size:12px;background:var(--s2);border:1px solid var(--bd);color:var(--tx);border-radius:5px;text-align:center"></td>'
+      +'<td style="padding:5px 7px;border-top:1px solid var(--bd);text-align:center;font-size:12px;color:'+(inflado?"var(--red)":"var(--m2)")+'">'+detalhe+(inflado?' &#9888;':'')+'</td>'
+      +'<td style="padding:5px 7px;border-top:1px solid var(--bd);text-align:center;font-size:12px;color:var(--m2)">'+orig+'</td>'
+      +'<td style="padding:5px 7px;border-top:1px solid var(--bd);text-align:center"><input id="cd-q-'+idx+'" type="number" min="0" value="" placeholder="digite" style="width:72px;padding:4px 6px;font-size:12px;background:var(--s2);border:1px solid var(--bd);color:var(--tx);border-radius:5px;text-align:center"></td>'
       +'</tr>';
     n++;
   });
   if(!n){ showToast("Nenhuma peca duplicada encontrada nesta maquina"); return; }
   openModal("Conferir Pecas Duplicadas ("+n+")",
-    '<div style="color:var(--m2);font-size:12.5px;margin-bottom:10px">Cada linha e uma peca cadastrada 2x. A coluna do meio mostra o saldo de cada cadastro hoje (riscado = ja escondido). Na ultima coluna, <b>digite a quantidade correta</b> &mdash; ja vem somada como sugestao. Ao aplicar, fica <b>uma peca so</b> com a quantidade que voce informou.</div>'
+    '<div style="color:var(--m2);font-size:12.5px;margin-bottom:10px">Cada linha e a MESMA peca cadastrada 2x &mdash; nao sao estoques diferentes, entao <b>nao se soma</b>. <b>Saldos hoje</b> mostra o que cada cadastro tem gravado (so referencia). <b>Digite a quantidade real</b> da prateleira na ultima coluna. <b>Linha deixada em branco nao e alterada</b>, entao da pra fazer aos poucos. Ao aplicar, fica <b>uma peca so</b> com a quantidade que voce informou.</div>'
     +'<div style="max-height:340px;overflow:auto;border:1px solid var(--bd);border-radius:8px"><table style="width:100%;border-collapse:collapse">'
-    +'<thead><tr style="background:var(--s2)"><th style="text-align:left;padding:6px 7px;font-size:11px;color:var(--m2)">Peca</th><th style="padding:6px 7px;font-size:11px;color:var(--m2)">Saldos hoje</th><th style="padding:6px 7px;font-size:11px;color:var(--m2)">Quantidade correta</th></tr></thead>'
+    +'<thead><tr style="background:var(--s2)"><th style="text-align:left;padding:6px 7px;font-size:11px;color:var(--m2)">Peca</th><th style="padding:6px 7px;font-size:11px;color:var(--m2)">Saldos hoje</th><th style="padding:6px 7px;font-size:11px;color:var(--m2)">Base</th><th style="padding:6px 7px;font-size:11px;color:var(--m2)">Quantidade correta</th></tr></thead>'
     +'<tbody>'+linhas+'</tbody></table></div>'
     +'<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px"><button class="btn btn-g" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="aplicarConferencia()">Aplicar</button></div>'
   , true);
@@ -3987,6 +4024,7 @@ function aplicarConferencia(){
   var mudou=0;
   DUP_GRUPOS.forEach(function(g,idx){
     var el=ge("cd-q-"+idx); if(!el) return;
+    if(String(el.value).trim()==="") return;
     var q=parseInt(el.value,10); if(isNaN(q)||q<0) return;
     var ids=[g.p].concat(g.s||[]);
     var membros=ids.map(function(id){return porId[id];}).filter(Boolean);
@@ -5533,7 +5571,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 58 - CONFERIR DUPLICADAS</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 61 - UNIFICA DUPLICADAS SOZINHO</div>
   </div>
 </div>
 </body></html>
