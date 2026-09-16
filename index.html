@@ -1112,9 +1112,9 @@ function dentroDoPeriodo(dataStr, periodo) {
 var MONTHS = ["Janeiro","Fevereiro","Marco","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
 var CAT_MAN = {manutencao:"Manutencao/Servicos",pecas:"Pecas",servico:"Servico",acidente:"Acidente",lubrificantes:"Lubrificantes",borracharia:"Borracharia",outros:"Outros"};
-var CAT_ADM = {folha:"Folha de Pagamento",ferias:"Ferias/Rescisao",fgts:"FGTS/Encargos",impostos:"ICMS/Impostos",honorarios:"Honorarios",adiantamento:"Adiantamento Viagem",adiant_sal:"Adiantamento Salario",borracharia:"Servicos de Borracharia",vale:"Vale/Beneficios",descarga:"Descarga/Operacao",outros:"Outros Admin"};
+var CAT_ADM = {folha:"Folha de Pagamento",ferias:"Ferias/Rescisao",fgts:"FGTS/Encargos",impostos:"ICMS/Impostos",honorarios:"Honorarios",adiantamento:"Adiantamento Viagem",adiant_sal:"Adiantamento Salario",borracharia:"Servicos de Borracharia",vale:"Vale/Beneficios",descarga:"Descarga/Operacao",antecipacao:"Antecipacao",banco_mercedes:"Banco Mercedes",financiamento:"Financiamentos",consorcio:"Consorcio",outros:"Outros Admin"};
 var CC_MAN = {manutencao:"#f97316",pecas:"#3b82f6",servico:"#f59e0b",acidente:"#ef4444",lubrificantes:"#14b8a6",borracharia:"#06b6d4",outros:"#8b5cf6"};
-var CC_ADM = {folha:"#6366f1",ferias:"#ec4899",fgts:"#f59e0b",impostos:"#ef4444",honorarios:"#8b5cf6",adiantamento:"#06b6d4",adiant_sal:"#14b8a6",borracharia:"#f97316",vale:"#10b981",descarga:"#84cc16",outros:"#94a3b8"};
+var CC_ADM = {folha:"#6366f1",ferias:"#ec4899",fgts:"#f59e0b",impostos:"#ef4444",honorarios:"#8b5cf6",adiantamento:"#06b6d4",adiant_sal:"#14b8a6",borracharia:"#f97316",vale:"#10b981",descarga:"#84cc16",antecipacao:"#e11d48",banco_mercedes:"#0ea5e9",financiamento:"#a855f7",consorcio:"#eab308",outros:"#94a3b8"};
 var CAT_UNI={}; (function(){ for(var k in CAT_ADM) CAT_UNI[k]=CAT_ADM[k]; for(var k2 in CAT_MAN) if(!(k2 in CAT_UNI)) CAT_UNI[k2]=CAT_MAN[k2]; })();
 var CC_UNI={}; (function(){ for(var k in CC_ADM) CC_UNI[k]=CC_ADM[k]; for(var k2 in CC_MAN) if(!(k2 in CC_UNI)) CC_UNI[k2]=CC_MAN[k2]; })();
 var PAY_UNI = ["Itaú (PIX)","Bradesco (PIX)","Banco XP (PIX)","Cartão de Crédito","Cartão Banco XP","Boleto","Transferência"];
@@ -2947,7 +2947,11 @@ var CAT_KEYWORDS = [
   {cat:"adiantamento", kw:["adiantamento viagem","diaria","pedagio","adiantamento de viagem"]},
   {cat:"adiant_sal", kw:["adiantamento salario","adiantamento de salario","vale salario"]},
   {cat:"vale", kw:["vale transporte","vale refeic","vale aliment","cesta basica","plano de saude","beneficio"]},
-  {cat:"descarga", kw:["descarga","chapa","operacao"]}
+  {cat:"descarga", kw:["descarga","chapa","operacao"]},
+  {cat:"antecipacao", kw:["antecipacao","antecipação"]},
+  {cat:"banco_mercedes", kw:["banco mercedes"]},
+  {cat:"financiamento", kw:["financiamento","financiamento veic","finaciamento"]},
+  {cat:"consorcio", kw:["consorcio","consórcio"]}
 ];
 function catSugerida(desc){
   var d=_normNome(desc); if(!d) return null;
@@ -5560,7 +5564,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 62 - RESTAURAR PECAS</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 63 - NOVAS CATEGORIAS</div>
   </div>
 </div>
 </body></html>
