@@ -3299,6 +3299,8 @@ function pushToServer(callback) {
       almoxMovs:  mergeById(almoxMovs,  rd.almoxMovs),
       almoxDelta: mergeAlmoxDelta(_lp.almoxDelta, rd.almoxDelta),
       almoxNovos: mergeById(_lp.almoxNovos || [], rd.almoxNovos || []),
+      manutKanban: mergeById(_lp.manutKanban || [], rd.manutKanban || []),
+      frota: (rd.frota && rd.frota.length) ? rd.frota : (_lp.frota || []),
       osDelta:    mergeOSById(_lp.osDelta, rd.osDelta),
       savedAt:    Date.now()
     };
@@ -3311,6 +3313,8 @@ function pushToServer(callback) {
     quotes    = merged.quotes;
     almoxMovs = merged.almoxMovs;
     if (merged.osDelta && merged.osDelta.length > 0) osData = mergeOSById(osData, merged.osDelta);
+    if (merged.manutKanban) manutKanban = mergeById(manutKanban, merged.manutKanban);
+    if (merged.frota && merged.frota.length) frota = merged.frota;
     // Reconstroi almoxarifado local: padrao + alteracoes + pecas novas
     almoxItems = deepCopy(DEFAULT_ALMOX);
     if (merged.almoxDelta) Object.keys(merged.almoxDelta).forEach(function(id){
@@ -3384,6 +3388,9 @@ function pullFromServer(callback) {
     // Salva osData no localStorage apos merge
     try { localStorage.setItem("tc_os_data", JSON.stringify(osData)); } catch(e){}
     saveLocalOnly();
+    if (rd.manutKanban) manutKanban = mergeById(manutKanban, rd.manutKanban);
+    if (rd.frota && rd.frota.length) frota = rd.frota;
+    if (currentSection==="mk" && typeof renderMK==="function") renderMK();
     lastPullTs = rd.savedAt;
     localStorage.setItem("tc_last_pull_ts", String(lastPullTs));
     // Re-renderiza a tela para mostrar dados novos imediatamente
@@ -3691,6 +3698,119 @@ function salvarMK(){
   try{ localStorage.setItem("tc_frota", JSON.stringify(frota)); }catch(e){}
   saveAll();
 }
+function mkGerarOS(id){
+  var m=mkFind(id); if(!m){ showToast("Registro nao encontrado",true); return; }
+  if(m.os){ if(!confirm("Este caminhao ja tem a OS "+m.os+" vinculada.\n\nGerar uma nova OS mesmo assim?")) return; }
+  if(!m.cavalo){ showToast("Informe a placa do cavalo",true); return; }
+  var num = "OS-" + new Date().getFullYear() + "-" + String(Date.now()).slice(-4);
+  var tipoInt = 1; // interna (oficina propria)
+  var servico = (m.desc||"").trim() || ("Manutencao "+(m.tipo||"")+" - "+m.cavalo);
+  var pecasOS = (m.pecas||[]).map(function(p){
+    return {itemId:p.itemId||"", produto:p.nome, unidade:p.unidade||"Un", qtd:p.qtd, custoUnit:p.custo||0};
+  });
+  var dt = (m.inicio||"").slice(0,10) || today();
+  var novaOS = {
+    i: uid(), n: num, st: "Em Aberto", col: "entrada",
+    pl: m.cavalo, fa: "TRANSCCEMA", mo: "Interno", ca: "",
+    so: (m.mecanico||""), ho: (m.km||0), pr: "Normal", ti: tipoInt,
+    classe: (m.tipo||"Corretiva"),
+    de: dt, df: "",
+    sv: [[servico, "Interna", "", "", tipoInt]],
+    pecas: pecasOS, fonte: "manutencao", updatedAt: Date.now()
+  };
+  osData.unshift(novaOS);
+  try { localStorage.setItem("tc_os_data", JSON.stringify(osData)); } catch(e){}
+  m.os = num; m.updatedAt = bumpTs(m);
+  var nb = 0;
+  if(!m.baixado){ nb = mkBaixarPecas(m); if(nb) m.baixado = true; }
+  salvarMK(); renderMK(); renderAlmox();
+  if(typeof renderOSView==="function") renderOSView();
+  showToast("OS "+num+" criada"+(nb?(" e "+nb+" peca(s) baixada(s) do estoque"):"")+"!");
+}
+function mkConcluirOS(id){
+  var m=mkFind(id); if(!m||!m.os) return;
+  for(var i=0;i<osData.length;i++){
+    if(String(osData[i].n)===String(m.os)){
+      osData[i].st="Servico Realizado"; osData[i].col="realizado";
+      osData[i].df=(m.fim||"").slice(0,10)||today();
+      osData[i].updatedAt=Date.now();
+      try { localStorage.setItem("tc_os_data", JSON.stringify(osData)); } catch(e){}
+      if(typeof renderOSView==="function") renderOSView();
+      return true;
+    }
+  }
+  return false;
+}
+function mkUltimoKm(placa){
+  var km=0;
+  (osData||[]).forEach(function(o){ if(o.pl===placa && (o.ho||0)>km) km=o.ho||0; });
+  (manutKanban||[]).forEach(function(m){ if(m.cavalo===placa && (m.km||0)>km) km=m.km||0; });
+  return km;
+}
+function mkHistorico(placa){
+  var h=(manutKanban||[]).filter(function(m){ return m.cavalo===placa && m.fim; })
+    .sort(function(a,b){ return String(b.fim).localeCompare(String(a.fim)); });
+  var os=(osData||[]).filter(function(o){ return o.pl===placa; })
+    .sort(function(a,b){ return String(b.de||"").localeCompare(String(a.de||"")); });
+  return {manut:h, os:os};
+}
+function mkMecanicos(){
+  var lista=[];
+  try{ (JSON.parse(localStorage.getItem("tc_users")||"[]")||[]).forEach(function(u){ if(u&&u.name&&u.active!==false) lista.push(u.name); }); }catch(e){}
+  (manutKanban||[]).forEach(function(m){ if(m.mecanico && lista.indexOf(m.mecanico)<0) lista.push(m.mecanico); });
+  return lista.sort();
+}
+function mkPecasOptions(sel){
+  var itens=(almoxItems||[]).filter(function(i){ return !i.deleted && (i.local||"SP")==="SP"; })
+    .sort(function(a,b){ return String(a.produto||"").localeCompare(String(b.produto||""),"pt-BR",{sensitivity:"base"}); });
+  return '<option value="">-- escolher peca do almoxarifado --</option>'+itens.map(function(i){
+    return '<option value="'+i.id+'"'+((sel===i.id)?" selected":"")+'>'+esc(i.produto)+' ('+i.saldo+' '+esc(i.unidade||"Un")+')</option>';
+  }).join("");
+}
+function mkAddPeca(){
+  var id=gv("mk-peca-sel"), q=parseInt(gv("mk-peca-qtd")||"1",10)||1;
+  if(!id){ showToast("Escolha a peca",true); return; }
+  var it=null; for(var i=0;i<almoxItems.length;i++){ if(almoxItems[i].id===id){ it=almoxItems[i]; break; } }
+  if(!it) return;
+  if(q<=0){ showToast("Quantidade invalida",true); return; }
+  if(q>(it.saldo||0) && !confirm("Saldo em estoque: "+(it.saldo||0)+".\nUsar "+q+" mesmo assim?")) return;
+  window._mkPecas=window._mkPecas||[];
+  for(var j=0;j<window._mkPecas.length;j++){ if(window._mkPecas[j].itemId===id){ window._mkPecas[j].qtd+=q; mkRenderPecas(); return; } }
+  window._mkPecas.push({itemId:id, nome:it.produto, qtd:q, unidade:it.unidade||"Un", custo:it.custoMedio||0});
+  ge("mk-peca-qtd").value="1";
+  mkRenderPecas();
+}
+function mkDelPeca(i){ window._mkPecas.splice(i,1); mkRenderPecas(); }
+function mkRenderPecas(){
+  var box=ge("mk-pecas-lista"); if(!box) return;
+  var L=window._mkPecas||[];
+  if(!L.length){ box.innerHTML='<div style="color:var(--mu);font-size:12px;padding:6px 0">Nenhuma peca adicionada.</div>'; return; }
+  box.innerHTML=L.map(function(p,i){
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-top:1px solid var(--bd);font-size:12.5px">'
+      +'<span>'+esc(p.nome)+'</span>'
+      +'<span style="display:flex;gap:10px;align-items:center"><b>'+p.qtd+' '+esc(p.unidade||"Un")+'</b>'
+      +'<span style="color:var(--red);cursor:pointer" onclick="mkDelPeca('+i+')">&#10005;</span></span></div>';
+  }).join("");
+}
+function mkBaixarPecas(m){
+  if(!m.pecas||!m.pecas.length) return 0;
+  var baixou=0;
+  m.pecas.forEach(function(p){
+    if(!p.itemId) return;
+    var id=p.itemId;
+    almoxItems=almoxItems.map(function(it){
+      if(it.id!==id) return it;
+      var ns=Math.max(0,(it.saldo||0)-(p.qtd||0));
+      return Object.assign({},it,{saldo:ns, valorEstoque:Math.round(ns*(it.custoMedio||0)*100)/100, updatedAt:bumpTs(it)});
+    });
+    almoxMovs.unshift({id:uid(), updatedAt:Date.now(), local:"SP", tipo:"saida", itemId:id,
+      produto:p.nome, unidade:p.unidade||"Un", qtd:p.qtd, placa:m.cavalo,
+      responsavel:(m.mecanico||""), descricao:"Manutencao "+(m.tipo||"")+(m.os?(" | "+m.os):""),
+      data:(m.inicio||"").slice(0,10)||today()});
+    baixou++;
+  });
+  return baixou;
+}
 function mkFind(id){ for(var i=0;i<manutKanban.length;i++){ if(manutKanban[i].id===id) return manutKanban[i]; } return null; }
 function mkVeic(placa){ for(var i=0;i<frota.length;i++){ if(frota[i].cavalo===placa) return frota[i]; } return null; }
 function mkAgora(){ var d=new Date(); return d.toISOString().slice(0,16); }
@@ -3737,8 +3857,9 @@ function openMKModal(id){
   var opts = placas.length
     ? placas.map(function(p){ return '<option value="'+esc(p)+'"'+((m&&m.cavalo===p)?" selected":"")+'>'+esc(p)+'</option>'; }).join("")
     : '<option value="">-- atualize a lista de caminhoes --</option>';
-  var mecs={}; manutKanban.forEach(function(x){ if(x.mecanico) mecs[x.mecanico]=1; });
-  var dl = Object.keys(mecs).map(function(x){ return '<option value="'+esc(x)+'">'; }).join("");
+  var dl = mkMecanicos().map(function(x){ return '<option value="'+esc(x)+'">'; }).join("");
+  window._mkPecas = m ? JSON.parse(JSON.stringify(m.pecas||[])) : [];
+  var kmSug = m ? (m.km||0) : 0;
   openModal(m?("Editar — "+esc(m.cavalo)):"Nova Manutencao",
     '<div class="form-row" style="margin-bottom:12px">'
     +'<div class="form-group"><label class="form-label">Cavalo *</label><select id="mk-cavalo" class="form-select" onchange="mkPreenche()">'+opts+'</select></div>'
@@ -3749,7 +3870,7 @@ function openMKModal(id){
     +'<div class="form-group"><label class="form-label">Mecanico responsavel</label><input id="mk-mecanico" class="form-input" list="mk-mecs" value="'+esc(m?(m.mecanico||""):"")+'"><datalist id="mk-mecs">'+dl+'</datalist></div>'
     +'</div>'
     +'<div class="form-row" style="margin-bottom:12px">'
-    +'<div class="form-group"><label class="form-label">Hodometro (km)</label><input id="mk-km" type="number" class="form-input" value="'+(m?(m.km||0):0)+'"></div>'
+    +'<div class="form-group"><label class="form-label">Hodometro (km)</label><input id="mk-km" type="number" class="form-input" value="'+kmSug+'"><div id="mk-km-hint" style="font-size:11px;color:var(--mu);margin-top:3px"></div></div>'
     +'<div class="form-group"><label class="form-label">Tipo de manutencao</label><select id="mk-tipo" class="form-select">'+MK_TIPOS.map(function(t){return '<option'+((m&&m.tipo===t)?" selected":"")+'>'+t+'</option>';}).join("")+'</select></div>'
     +'</div>'
     +'<div class="form-row" style="margin-bottom:12px">'
@@ -3758,27 +3879,31 @@ function openMKModal(id){
     +'</div>'
     +'<div class="form-group" style="margin-bottom:12px"><label class="form-label">Ordem de Servico (numero)</label><input id="mk-os" class="form-input" placeholder="OS-2026-0000" value="'+esc(m?(m.os||""):"")+'"></div>'
     +'<div class="form-group" style="margin-bottom:12px"><label class="form-label">Servico / observacao</label><textarea id="mk-desc" class="form-textarea" rows="2">'+esc(m?(m.desc||""):"")+'</textarea></div>'
-    +'<div class="form-group" style="margin-bottom:14px"><label class="form-label">Pecas utilizadas (uma por linha: NOME=QTD)</label><textarea id="mk-pecas" class="form-textarea" rows="3" style="font-family:monospace;font-size:12px" placeholder="Farol auxiliar L/D=2&#10;Lampada R5W=6">'+esc(m?((m.pecas||[]).map(function(p){return p.nome+"="+p.qtd;}).join("\n")):"")+'</textarea></div>'
+    +'<div class="form-group" style="margin-bottom:14px"><label class="form-label">Pecas do almoxarifado (dao baixa no estoque)</label>'
+    +'<div style="display:flex;gap:7px"><select id="mk-peca-sel" class="form-select" style="flex:1;font-size:12px">'+mkPecasOptions("")+'</select>'
+    +'<input id="mk-peca-qtd" type="number" min="1" value="1" class="form-input" style="width:72px;text-align:center">'
+    +'<button type="button" class="btn btn-g" onclick="mkAddPeca()">+ Add</button></div>'
+    +'<div id="mk-pecas-lista" style="margin-top:8px"></div></div>'
     +'<div style="display:flex;justify-content:space-between;gap:10px">'
     +(m?'<button class="btn btn-g" onclick="excluirMK(\''+m.id+'\')" style="color:var(--red)">Excluir</button>':'<span></span>')
     +'<div style="display:flex;gap:10px"><button class="btn btn-g" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="salvarMK2('+(m?("'"+m.id+"'"):"null")+')">Salvar</button></div></div>'
   , true);
+  mkRenderPecas(); mkPreenche();
 }
 function mkPreenche(){
-  var p=gv("mk-cavalo"); var f=mkVeic(p); if(!f) return;
-  if(ge("mk-carreta")) ge("mk-carreta").value=f.carreta||"";
-  if(ge("mk-motorista")) ge("mk-motorista").value=f.motorista||"";
+  var p=gv("mk-cavalo"); var f=mkVeic(p);
+  if(f){
+    if(ge("mk-carreta")) ge("mk-carreta").value=f.carreta||"";
+    if(ge("mk-motorista")) ge("mk-motorista").value=f.motorista||"";
+  }
+  var km=mkUltimoKm(p), hint=ge("mk-km-hint"), campo=ge("mk-km");
+  if(hint){ hint.innerHTML = km ? ("ultimo registrado: "+Number(km).toLocaleString('pt-BR')+" km") : ""; }
+  if(campo && km && (!campo.value || campo.value==="0")) campo.value=km;
 }
 function salvarMK2(id){
   var cav=(gv("mk-cavalo")||"").trim().toUpperCase();
   if(!cav){ showToast("Selecione o cavalo",true); return; }
-  var pecas=[];
-  (gv("mk-pecas")||"").split(/\r?\n/).forEach(function(l){
-    l=l.trim(); if(!l) return;
-    var q=1, mm=l.match(/=\s*(\d+)\s*$/);
-    if(mm){ q=parseInt(mm[1],10)||1; l=l.replace(/=\s*\d+\s*$/,"").trim(); }
-    if(l) pecas.push({nome:l, qtd:q});
-  });
+  var pecas=(window._mkPecas||[]).slice();
   var dados={
     cavalo:cav, carreta:(gv("mk-carreta")||"").trim().toUpperCase(),
     motorista:(gv("mk-motorista")||"").trim(), mecanico:(gv("mk-mecanico")||"").trim(),
@@ -3864,14 +3989,25 @@ function renderMKSide(){
   }
   var cor=MK_TIPO_COR[m.tipo]||"#94a3b8";
   var h=mkHoras(m.inicio,m.fim);
+  var custoPec=0; (m.pecas||[]).forEach(function(p){ custoPec += (p.qtd||0)*(p.custo||0); });
   var pec=(m.pecas||[]).length
-    ? (m.pecas||[]).map(function(p){ return '<div class="mk-pline"><span>'+esc(p.nome)+'</span><b>'+p.qtd+'</b></div>'; }).join("")
+    ? (m.pecas||[]).map(function(p){ return '<div class="mk-pline"><span>'+esc(p.nome)+'</span><b>'+p.qtd+(p.custo?(' &middot; '+fmtR((p.qtd||0)*(p.custo||0))):'')+'</b></div>'; }).join("")
+      + (custoPec?('<div class="mk-pline" style="color:var(--acc);font-weight:700"><span>Custo em pecas</span><b>'+fmtR(custoPec)+'</b></div>'):'')
+      + (m.baixado?'<div style="font-size:11px;color:var(--grn);margin-top:5px">&#10003; baixado do estoque</div>':'<div style="font-size:11px;color:var(--yel);margin-top:5px">&#9888; ainda nao baixado (baixa ao gerar a OS)</div>')
     : '<div style="color:var(--mu);font-size:12px;padding:4px 0">Nenhuma peca informada</div>';
+  var hist=mkHistorico(m.cavalo);
+  var histHtml = hist.manut.length
+    ? hist.manut.slice(0,4).map(function(x){
+        var hh=mkHoras(x.inicio,x.fim);
+        return '<div class="mk-pline"><span>'+mkFmtDT(x.fim).slice(0,10)+' &middot; '+esc(x.tipo||"")+'</span><b>'+(hh!==null?hh.toFixed(1).replace(".",",")+"h":"--")+'</b></div>';
+      }).join("")
+    : '<div style="color:var(--mu);font-size:12px;padding:4px 0">Primeira manutencao deste caminhao</div>';
   box.innerHTML=
     '<div style="display:flex;justify-content:space-between;align-items:flex-start"><div><h3 style="font-size:16px">'+esc(m.cavalo)+'</h3>'
     +'<div style="color:var(--m2);font-size:11.5px">'+esc(m.carreta||"sem carreta")+(m.motorista?(" &middot; "+esc(m.motorista)):"")+'</div></div>'
     +'<span class="mk-tag" style="background:'+cor+'22;color:'+cor+'">'+esc(m.tipo||"")+'</span></div>'
-    +'<div class="mk-fld"><div class="l">Ordem de Servico</div><div class="v">'+(m.os?('<span style="color:var(--blu);cursor:pointer" onclick="mkAbrirOS(\''+esc(m.os)+'\')">'+esc(m.os)+' &rarr;</span>'):'<span style="color:var(--mu)">nao vinculada</span>')+'</div></div>'
+    +'<div class="mk-fld"><div class="l">Ordem de Servico</div><div class="v">'+(m.os?('<span style="color:var(--blu);cursor:pointer" onclick="mkAbrirOS(\''+esc(m.os)+'\')">'+esc(m.os)+' &rarr;</span>'):'<span style="color:var(--mu)">nao vinculada</span>')+'</div>'
+    +'<button class="btn btn-g" style="width:100%;justify-content:center;margin-top:7px;font-size:12px" onclick="mkGerarOS(\''+m.id+'\')">&#128220; '+(m.os?"Gerar outra OS":"Gerar OS automatica")+'</button></div>'
     +'<div class="mk-fld"><div class="l">Mecanico responsavel</div><div class="v">'+esc(m.mecanico||"--")+'</div></div>'
     +'<div class="mk-fld"><div class="l">Hodometro</div><div class="v">'+(m.km?Number(m.km).toLocaleString('pt-BR')+" km":"--")+'</div></div>'
     +'<div class="mk-fld"><div class="l">Entrada</div><div class="v">'+mkFmtDT(m.inicio)+'</div></div>'
@@ -3879,6 +4015,7 @@ function renderMKSide(){
     +(h!==null?'<div class="mk-fld"><div class="l">Tempo de servico</div><div class="v" style="color:var(--grn)">'+h.toFixed(1).replace(".",",")+' h</div></div>':'')
     +(m.desc?'<div class="mk-fld"><div class="l">Servico</div><div class="v" style="font-size:12.5px;font-weight:400">'+esc(m.desc)+'</div></div>':'')
     +'<div class="mk-fld"><div class="l">Pecas utilizadas</div>'+pec+'</div>'
+    +'<div class="mk-fld"><div class="l">Historico deste caminhao ('+hist.manut.length+' manutencoes, '+hist.os.length+' OS)</div>'+histHtml+'</div>'
     +'<div style="display:flex;gap:8px;margin-top:14px">'
     +'<button class="btn btn-p" style="flex:1;justify-content:center" onclick="openMKModal(\''+m.id+'\')">Editar</button>'
     +(m.col!=="pronto"?'<button class="btn btn-ok" onclick="mkLiberar(\''+m.id+'\')">Liberar &#10003;</button>':'<button class="btn btn-g" onclick="mkViagem(\''+m.id+'\')">Em viagem &#128666;</button>')
@@ -3887,7 +4024,8 @@ function renderMKSide(){
 function mkLiberar(id){
   var m=mkFind(id); if(!m) return;
   m.col="pronto"; if(!m.fim) m.fim=mkAgora(); m.updatedAt=bumpTs(m);
-  salvarMK(); renderMK(); showToast(m.cavalo+" liberado!");
+  var okOS = m.os ? mkConcluirOS(id) : false;
+  salvarMK(); renderMK(); showToast(m.cavalo+" liberado!"+(okOS?" OS "+m.os+" concluida.":""));
 }
 function mkViagem(id){
   var m=mkFind(id); if(!m) return;
@@ -5946,7 +6084,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 70 - FROTA JA NO SISTEMA</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 73 - MANUTENCAO INTEGRADA</div>
   </div>
 </div>
 </body></html>
