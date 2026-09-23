@@ -5383,12 +5383,12 @@ var SESSION_KEY = "tc_session";
 
 // Perfis pre-definidos
 var PERFIS = {
-  admin:      {label:"Administrador",  modules:["dashboard","orders","quotes","suppliers","expenses","almox","os","settings"]},
-  compras:    {label:"Compras",         modules:["dashboard","orders","quotes","suppliers"]},
-  financeiro: {label:"Financeiro",      modules:["expenses"]},
-  almoxarife: {label:"Almoxarifado",    modules:["dashboard","almox","os"]},
-  mecanico:   {label:"Mecanico",        modules:["os","almox"]},
-  custom:     {label:"Personalizado",   modules:[]}
+  admin:      {label:"Administrador",  modules:["dashboard","orders","quotes","suppliers","expenses","almox","os","mk","abast","settings"]},
+  compras:    {label:"Compras",         modules:["dashboard","orders","quotes","suppliers","mk"]},
+  financeiro: {label:"Financeiro",      modules:["expenses","mk"]},
+  almoxarife: {label:"Almoxarifado",    modules:["dashboard","almox","os","mk"]},
+  mecanico:   {label:"Mecanico",        modules:["os","almox","mk"]},
+  custom:     {label:"Personalizado",   modules:["mk"]}
 };
 
 var ALL_MODULES = [
@@ -5411,7 +5411,8 @@ var DEFAULT_USERS = [
   {id:"u3",name:"KELLY",username:"kelly",passwordHash:"4ca6f6d5a544bf57c323657ad33aae1a019c775518cf4414beedb86962aea7c1",role:"admin",modules:["all"],active:true,createdAt:"2026-05-28"},
   {id:"u4",name:"JOAO",username:"joao",passwordHash:"ed2befb11499489e2570cb053f774b8ed93e89eddab3f78867a2a5f32c58845e",role:"custom",modules:["orders","quotes","suppliers","almox","os"],active:true,createdAt:"2026-05-28"},
   {id:"u5",name:"MAURICIO",username:"mauricio",passwordHash:"4f22df54942898f169802bbfe34d6d5b1455cdeb50b387bd5b6a3a6a2496cef7",role:"custom",modules:["expenses"],active:true,createdAt:"2026-05-28"},
-  {id:"u6",name:"ALAN",username:"alan",passwordHash:"7315906c3c988bce3175eb40b4b0b7d17f27d4b813d16c9b5aa415bc0d2e0734",role:"custom",modules:["orders"],readonly:true,active:true,createdAt:"2026-06-03"}
+  {id:"u6",name:"ALAN",username:"alan",passwordHash:"7315906c3c988bce3175eb40b4b0b7d17f27d4b813d16c9b5aa415bc0d2e0734",role:"custom",modules:["orders"],readonly:true,active:true,createdAt:"2026-06-03"},
+  {id:"u7",name:"ANDERSON",username:"anderson",passwordHash:"c1d35cc3471fe509203d65b3e7a53fc82337ac9ae2c797b836621f706fe37df8",role:"custom",modules:["orders","quotes","suppliers","almox","os","mk"],active:true,createdAt:"2026-09-23"}
 ];
 // Hash padrao: "admin" com SHA-256 simples (senha: admin)
 
@@ -5419,10 +5420,10 @@ var DEFAULT_USERS = [
 // v2 - force refresh if modules changed
 var _storedUsers = JSON.parse(localStorage.getItem(USERS_KEY) || "[]");
 // Reset if default users changed (check by version)
-if (localStorage.getItem("tc_users_ver") !== "v5") {
+if (localStorage.getItem("tc_users_ver") !== "v6") {
   _storedUsers = [];
   localStorage.removeItem(USERS_KEY);
-  localStorage.setItem("tc_users_ver","v5");
+  localStorage.setItem("tc_users_ver","v6");
 }
 var tcUsers = _storedUsers.length > 0 ? _storedUsers : JSON.parse(JSON.stringify(DEFAULT_USERS));
 // Add any missing default users
@@ -5564,11 +5565,12 @@ function fazerLogout() {
 
 // -- PERMISSOES --
 function getModulosPermitidos(user) {
+  var _libera = function(lista){ if(lista.indexOf("mk")<0) lista.push("mk"); return lista; };
   if (!user) return [];
   if (user.role === 'admin' || (user.modules && user.modules.indexOf('all') >= 0)) {
     return ALL_MODULES.map(function(m){ return m.k; });
   }
-  return user.modules || PERFIS[user.role]?.modules || [];
+  return _libera((user.modules || PERFIS[user.role]?.modules || []).slice());
 }
 
 function aplicarPermissoes(user) {
@@ -5929,7 +5931,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 66 - PARA DE DUPLICAR PECAS</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 68 - USUARIO ANDERSON</div>
   </div>
 </div>
 </body></html>
