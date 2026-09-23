@@ -485,6 +485,7 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-g" onclick="openFrotaModal()">&#128666; Atualizar Caminhoes</button>
+          <button class="btn btn-g" onclick="mkDiagnostico()">&#129513; Verificar Sync</button>
           <button class="btn btn-g" onclick="printMKReport()">&#128202; Producao</button>
           <button class="btn btn-p" onclick="openMKModal()">+ Nova Manutencao</button>
         </div>
@@ -3854,6 +3855,44 @@ function mkLimparCarona(){
 function mkLimparCarona(){
   quotes=(quotes||[]).filter(function(q){ return !q || q.id!=="__mkdata__"; });
 }
+function mkDiagnostico(){
+  if(!syncUrl){ alert("URL de sincronizacao nao configurada."); return; }
+  showToast("Consultando a planilha...");
+  fetch(syncUrl+"?action=pull&t="+Date.now(), {redirect:"follow"})
+    .then(function(r){ return r.json(); })
+    .then(function(rd){
+      var L=[];
+      L.push("=== NESTA MAQUINA ===");
+      L.push("Manutencoes no quadro: "+(manutKanban||[]).length);
+      L.push("Caminhoes na frota: "+(frota||[]).length);
+      L.push("");
+      L.push("=== O QUE VEIO DA PLANILHA ===");
+      if(!rd){ L.push("Resposta vazia do servidor."); alert(L.join("\n")); return; }
+      L.push("Campos recebidos: "+Object.keys(rd).join(", "));
+      L.push("manutKanban direto: "+(rd.manutKanban?(rd.manutKanban.length+" registro(s)"):"NAO VEIO (servidor descarta)"));
+      L.push("frota direto: "+(rd.frota?(rd.frota.length+" registro(s)"):"NAO VEIO (servidor descarta)"));
+      var qs=rd.quotes||[];
+      L.push("quotes: "+qs.length+" registro(s)");
+      var mk=qs.filter(function(q){ return q && String(q.id||"").indexOf("__mk")===0; });
+      L.push("registros de manutencao dentro de quotes: "+mk.length);
+      if(mk.length){
+        var comPayload=mk.filter(function(q){ return q.payload; }).length;
+        L.push("  com o conteudo (payload): "+comPayload);
+        if(!comPayload) L.push("  >>> o servidor apagou o conteudo. Precisa ajustar o script da planilha.");
+        else {
+          try{
+            var ex=JSON.parse(mk.find(function(q){return q.payload;}).payload);
+            L.push("  exemplo: "+(ex.cavalo||ex[0]&&ex[0].cavalo||"?"));
+          }catch(e){ L.push("  conteudo ilegivel"); }
+        }
+      } else {
+        L.push("  >>> nada de manutencao chegou na planilha.");
+        L.push("  Possivel causa: a outra maquina ainda nao sincronizou com a versao nova.");
+      }
+      alert(L.join("\n"));
+    })
+    .catch(function(e){ alert("Erro ao consultar a planilha:\n"+e); });
+}
 function mkFind(id){ for(var i=0;i<manutKanban.length;i++){ if(manutKanban[i].id===id) return manutKanban[i]; } return null; }
 function mkVeic(placa){ for(var i=0;i<frota.length;i++){ if(frota[i].cavalo===placa) return frota[i]; } return null; }
 function mkAgora(){ var d=new Date(); return d.toISOString().slice(0,16); }
@@ -6127,7 +6166,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 75 - MANUTENCAO SEM SOBRESCREVER</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 76 - DIAGNOSTICO DE SYNC</div>
   </div>
 </div>
 </body></html>
