@@ -2561,6 +2561,7 @@ function saveQuote() {
   quoteSelected = []; quoteGo(1); renderQuoteHistory(); updateBadges(); showToast("Cotacao registrada!");
 }
 function renderQuoteHistory() {
+  mkLimparCarona();
   var wrap = ge("quote-history-wrap"), list = ge("quote-history-list");
   if (!quotes.length) { if(wrap) wrap.style.display="none"; return; }
   if (wrap) wrap.style.display = "block";
@@ -3315,6 +3316,7 @@ function pushToServer(callback) {
     if (merged.osDelta && merged.osDelta.length > 0) osData = mergeOSById(osData, merged.osDelta);
     if (merged.manutKanban) manutKanban = mergeById(manutKanban, merged.manutKanban);
     if (merged.frota && merged.frota.length) frota = merged.frota;
+    mkExtrairCarona(merged.quotes); mkLimparCarona();
     // Reconstroi almoxarifado local: padrao + alteracoes + pecas novas
     almoxItems = deepCopy(DEFAULT_ALMOX);
     if (merged.almoxDelta) Object.keys(merged.almoxDelta).forEach(function(id){
@@ -3390,6 +3392,7 @@ function pullFromServer(callback) {
     saveLocalOnly();
     if (rd.manutKanban) manutKanban = mergeById(manutKanban, rd.manutKanban);
     if (rd.frota && rd.frota.length) frota = rd.frota;
+    mkExtrairCarona(rd.quotes); mkLimparCarona();
     if (currentSection==="mk" && typeof renderMK==="function") renderMK();
     lastPullTs = rd.savedAt;
     localStorage.setItem("tc_last_pull_ts", String(lastPullTs));
@@ -3488,6 +3491,7 @@ function setAllData(obj) {
   if (obj.osData && obj.osData.length)   osData = mergeOSById(osData || [], obj.osData);
   if (obj.frota && obj.frota.length) frota = obj.frota;
   if (obj.manutKanban) manutKanban = mergeById(manutKanban, obj.manutKanban);
+  if (obj.quotes) { mkExtrairCarona(obj.quotes); }
   if (obj.almoxNovos && obj.almoxNovos.length) {
     obj.almoxNovos.forEach(function(it){
       if(!it || !it.id) return;
@@ -3620,6 +3624,17 @@ packData = function() {
   d.almoxNovos = novos;
   d.frota = frota;
   d.manutKanban = manutKanban;
+  // O servidor so grava campos antigos: cada manutencao viaja como um registro proprio
+  try {
+    d.quotes = (d.quotes||[]).filter(function(q){ return !q || String(q.id||"").indexOf("__mk")!==0; });
+    (manutKanban||[]).forEach(function(m){
+      if(!m || !m.id) return;
+      d.quotes.push({id:"__mk_"+m.id, _mk:1, updatedAt:m.updatedAt||Date.now(), payload:JSON.stringify(m)});
+    });
+    if(frota && frota.length){
+      d.quotes.push({id:"__mkfrota__", _mk:1, updatedAt:Date.now(), payload:JSON.stringify(frota)});
+    }
+  } catch(e){}
   d.almoxMovs  = almoxMovs;
   d.almoxItems = null; // nao envia a lista completa de 833 (economiza espaco)
   return d;
@@ -3810,6 +3825,34 @@ function mkBaixarPecas(m){
     baixou++;
   });
   return baixou;
+}
+function mkExtrairCarona(lista){
+  if(!lista || !lista.length) return null;
+  var cards=[], frotaNova=null, achou=false;
+  for(var i=0;i<lista.length;i++){
+    var q=lista[i]; if(!q || !q.payload) continue;
+    var id=String(q.id||"");
+    if(id==="__mkfrota__"){
+      try{ var f=JSON.parse(q.payload); if(f && f.length) frotaNova=f; achou=true; }catch(e){}
+    } else if(id.indexOf("__mk_")===0){
+      try{ var c=JSON.parse(q.payload); if(c && c.id) cards.push(c); achou=true; }catch(e){}
+    } else if(id==="__mkdata__"){
+      try{ var p=JSON.parse(q.payload);
+        if(p.frota && p.frota.length) frotaNova=p.frota;
+        if(p.manutKanban) p.manutKanban.forEach(function(x){ if(x&&x.id) cards.push(x); });
+        achou=true;
+      }catch(e){}
+    }
+  }
+  if(cards.length) manutKanban=mergeById(manutKanban, cards);
+  if(frotaNova) frota=frotaNova;
+  return achou||null;
+}
+function mkLimparCarona(){
+  quotes=(quotes||[]).filter(function(q){ return !q || String(q.id||"").indexOf("__mk")!==0; });
+}
+function mkLimparCarona(){
+  quotes=(quotes||[]).filter(function(q){ return !q || q.id!=="__mkdata__"; });
 }
 function mkFind(id){ for(var i=0;i<manutKanban.length;i++){ if(manutKanban[i].id===id) return manutKanban[i]; } return null; }
 function mkVeic(placa){ for(var i=0;i<frota.length;i++){ if(frota[i].cavalo===placa) return frota[i]; } return null; }
@@ -6084,7 +6127,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 73 - MANUTENCAO INTEGRADA</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 75 - MANUTENCAO SEM SOBRESCREVER</div>
   </div>
 </div>
 </body></html>
