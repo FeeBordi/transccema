@@ -3318,6 +3318,9 @@ function pushToServer(callback) {
     if (merged.manutKanban) manutKanban = mergeById(manutKanban, merged.manutKanban);
     if (merged.frota && merged.frota.length) frota = merged.frota;
     mkExtrairCarona(merged.quotes); mkLimparCarona();
+    try { mkDedup(); merged.manutKanban = manutKanban; } catch(e){}
+    try { localStorage.setItem("tc_manut_kb", JSON.stringify(manutKanban)); } catch(e){}
+    try { localStorage.setItem("tc_frota", JSON.stringify(frota)); } catch(e){}
     // Reconstroi almoxarifado local: padrao + alteracoes + pecas novas
     almoxItems = deepCopy(DEFAULT_ALMOX);
     if (merged.almoxDelta) Object.keys(merged.almoxDelta).forEach(function(id){
@@ -3354,8 +3357,12 @@ function pullFromServer(callback) {
   .then(function(res) {
     if (!res.ok) { if (callback) callback(false, res.error||"Erro"); return; }
     var rd = res.data;
-    if (!rd || !rd.savedAt) {
-      // Sheets vazio -- envia dados locais
+    var _vazio = !rd || Object.keys(rd).filter(function(k){
+      var v=rd[k];
+      return (v instanceof Array && v.length>0) || (v && typeof v==="object" && !(v instanceof Array) && Object.keys(v).length>0);
+    }).length===0;
+    if (_vazio) {
+      // Sheets realmente vazio -- envia dados locais
       pushToServer(function(ok){ if (callback) callback(ok, ok?"enviado":"erro"); });
       return;
     }
@@ -3390,10 +3397,13 @@ function pullFromServer(callback) {
     }
     // Salva osData no localStorage apos merge
     try { localStorage.setItem("tc_os_data", JSON.stringify(osData)); } catch(e){}
-    saveLocalOnly();
     if (rd.manutKanban) manutKanban = mergeById(manutKanban, rd.manutKanban);
     if (rd.frota && rd.frota.length) frota = rd.frota;
     mkExtrairCarona(rd.quotes); mkLimparCarona();
+    try { mkDedup(); } catch(e){}
+    try { localStorage.setItem("tc_manut_kb", JSON.stringify(manutKanban)); } catch(e){}
+    try { localStorage.setItem("tc_frota", JSON.stringify(frota)); } catch(e){}
+    saveLocalOnly();
     if (currentSection==="mk" && typeof renderMK==="function") renderMK();
     lastPullTs = rd.savedAt;
     localStorage.setItem("tc_last_pull_ts", String(lastPullTs));
@@ -3492,6 +3502,7 @@ function setAllData(obj) {
   if (obj.osData && obj.osData.length)   osData = mergeOSById(osData || [], obj.osData);
   if (obj.frota && obj.frota.length) frota = obj.frota;
   if (obj.manutKanban) manutKanban = mergeById(manutKanban, obj.manutKanban);
+  try { mkDedup(); } catch(e){}
   if (obj.quotes) { mkExtrairCarona(obj.quotes); }
   if (obj.almoxNovos && obj.almoxNovos.length) {
     obj.almoxNovos.forEach(function(it){
@@ -3710,13 +3721,14 @@ function consolidarDuplicatas(){ return 0; }
 
 // ===================== MANUTENCAO — KANBAN =====================
 function salvarMK(){
+  try{ mkDedup(); }catch(e){}
   try{ localStorage.setItem("tc_manut_kb", JSON.stringify(manutKanban)); }catch(e){}
   try{ localStorage.setItem("tc_frota", JSON.stringify(frota)); }catch(e){}
   saveAll();
 }
 function mkGerarOS(id){
   var m=mkFind(id); if(!m){ showToast("Registro nao encontrado",true); return; }
-  if(m.os){ if(!confirm("Este caminhao ja tem a OS "+m.os+" vinculada.\n\nGerar uma nova OS mesmo assim?")) return; }
+  if(m.os){ if(!confirm("Este caminhao ja tem a(s) OS "+m.os+" vinculada(s).\n\nGerar mais uma OS para o MESMO cartao?")) return; }
   if(!m.cavalo){ showToast("Informe a placa do cavalo",true); return; }
   var num = "OS-" + new Date().getFullYear() + "-" + String(Date.now()).slice(-4);
   var tipoInt = 1; // interna (oficina propria)
@@ -3736,7 +3748,8 @@ function mkGerarOS(id){
   };
   osData.unshift(novaOS);
   try { localStorage.setItem("tc_os_data", JSON.stringify(osData)); } catch(e){}
-  m.os = num; m.updatedAt = bumpTs(m);
+  var _oss = mkOSNums(m.os); if(_oss.indexOf(num)<0) _oss.push(num);
+  m.os = _oss.join(", "); m.updatedAt = bumpTs(m);
   var nb = 0;
   if(!m.baixado){ nb = mkBaixarPecas(m); if(nb) m.baixado = true; }
   salvarMK(); renderMK(); renderAlmox();
@@ -3744,27 +3757,32 @@ function mkGerarOS(id){
   showToast("OS "+num+" criada"+(nb?(" e "+nb+" peca(s) baixada(s) do estoque"):"")+"!");
 }
 function mkConcluirOS(id){
-  var m=mkFind(id); if(!m||!m.os) return;
-  for(var i=0;i<osData.length;i++){
-    if(String(osData[i].n)===String(m.os)){
-      osData[i].st="Servico Realizado"; osData[i].col="realizado";
-      osData[i].df=(m.fim||"").slice(0,10)||today();
-      osData[i].updatedAt=Date.now();
-      try { localStorage.setItem("tc_os_data", JSON.stringify(osData)); } catch(e){}
-      if(typeof renderOSView==="function") renderOSView();
-      return true;
+  var m=mkFind(id); if(!m||!m.os) return false;
+  var nums=mkOSNums(m.os), n=0;
+  nums.forEach(function(num){
+    for(var i=0;i<osData.length;i++){
+      if(String(osData[i].n)===String(num)){
+        osData[i].st="Servico Realizado"; osData[i].col="realizado";
+        osData[i].df=(m.fim||"").slice(0,10)||today();
+        osData[i].updatedAt=Date.now(); n++;
+        break;
+      }
     }
+  });
+  if(n){
+    try { localStorage.setItem("tc_os_data", JSON.stringify(osData)); } catch(e){}
+    if(typeof renderOSView==="function") renderOSView();
   }
-  return false;
+  return n>0;
 }
 function mkUltimoKm(placa){
   var km=0;
   (osData||[]).forEach(function(o){ if(o.pl===placa && (o.ho||0)>km) km=o.ho||0; });
-  (manutKanban||[]).forEach(function(m){ if(m.cavalo===placa && (m.km||0)>km) km=m.km||0; });
+  mkAtivos().forEach(function(m){ if(m.cavalo===placa && (m.km||0)>km) km=m.km||0; });
   return km;
 }
 function mkHistorico(placa){
-  var h=(manutKanban||[]).filter(function(m){ return m.cavalo===placa && m.fim; })
+  var h=mkAtivos().filter(function(m){ return m.cavalo===placa && m.fim; })
     .sort(function(a,b){ return String(b.fim).localeCompare(String(a.fim)); });
   var os=(osData||[]).filter(function(o){ return o.pl===placa; })
     .sort(function(a,b){ return String(b.de||"").localeCompare(String(a.de||"")); });
@@ -3773,7 +3791,7 @@ function mkHistorico(placa){
 function mkMecanicos(){
   var lista=[];
   try{ (JSON.parse(localStorage.getItem("tc_users")||"[]")||[]).forEach(function(u){ if(u&&u.name&&u.active!==false) lista.push(u.name); }); }catch(e){}
-  (manutKanban||[]).forEach(function(m){ if(m.mecanico && lista.indexOf(m.mecanico)<0) lista.push(m.mecanico); });
+  mkAtivos().forEach(function(m){ if(m.mecanico && lista.indexOf(m.mecanico)<0) lista.push(m.mecanico); });
   return lista.sort();
 }
 function mkPecasOptions(sel){
@@ -3852,9 +3870,6 @@ function mkExtrairCarona(lista){
 function mkLimparCarona(){
   quotes=(quotes||[]).filter(function(q){ return !q || String(q.id||"").indexOf("__mk")!==0; });
 }
-function mkLimparCarona(){
-  quotes=(quotes||[]).filter(function(q){ return !q || q.id!=="__mkdata__"; });
-}
 function mkDiagnostico(){
   if(!syncUrl){ alert("URL de sincronizacao nao configurada."); return; }
   showToast("Consultando a planilha...");
@@ -3893,7 +3908,79 @@ function mkDiagnostico(){
     })
     .catch(function(e){ alert("Erro ao consultar a planilha:\n"+e); });
 }
-function mkFind(id){ for(var i=0;i<manutKanban.length;i++){ if(manutKanban[i].id===id) return manutKanban[i]; } return null; }
+function mkPlacaKey(p){ return String(p||"").toUpperCase().replace(/[^A-Z0-9]/g,""); }
+function _idMK(placa){ return "mk_"+mkPlacaKey(placa); }
+function mkAtivos(){ return (manutKanban||[]).filter(function(m){ return m && !m.deleted; }); }
+function mkPorPlaca(placa){
+  var k=mkPlacaKey(placa), a=mkAtivos();
+  for(var i=0;i<a.length;i++){ if(mkPlacaKey(a[i].cavalo)===k) return a[i]; }
+  return null;
+}
+function mkOSNums(v){
+  var r=[]; String(v||"").split(/[,;]+/).forEach(function(x){ x=x.trim(); if(x && r.indexOf(x)<0) r.push(x); });
+  return r;
+}
+function mkOSLinks(v){
+  var n=mkOSNums(v);
+  if(!n.length) return '<span style="color:var(--mu)">nao vinculada</span>';
+  return n.map(function(x){ return '<span style="color:var(--blu);cursor:pointer;display:inline-block;margin-right:12px" onclick="mkAbrirOS(\''+esc(x)+'\')">'+esc(x)+' &rarr;</span>'; }).join("");
+}
+// UM cartao por placa. Se a mesma placa aparecer 2x (duas maquinas, duas OS),
+// junta tudo num cartao so e deixa lapide para a copia sumir nas outras maquinas.
+function mkDedup(){
+  if(!(manutKanban instanceof Array)){ manutKanban=[]; return 0; }
+  var vivos=[], tumbas=[], porPlaca={}, ordem=[], mudou=0;
+  manutKanban.forEach(function(m){
+    if(!m || !m.id) return;
+    if(m.deleted){ tumbas.push(m); return; }
+    var k=mkPlacaKey(m.cavalo);
+    if(!k){ vivos.push(m); return; }
+    if(porPlaca[k]===undefined){ porPlaca[k]=m; ordem.push(k); return; }
+    mudou++;
+    var a=porPlaca[k], b=m;
+    var venc=((b.updatedAt||0)>(a.updatedAt||0))?b:a;
+    var perd=(venc===b)?a:b;
+    var oss=mkOSNums(venc.os);
+    mkOSNums(perd.os).forEach(function(x){ if(oss.indexOf(x)<0) oss.push(x); });
+    venc.os=oss.join(", ");
+    var pcs=(venc.pecas||[]).slice();
+    (perd.pecas||[]).forEach(function(p){
+      if(!p) return; var ja=false;
+      for(var i=0;i<pcs.length;i++){ if(pcs[i] && String(pcs[i].itemId||pcs[i].id||pcs[i].nome)===String(p.itemId||p.id||p.nome)){ ja=true; break; } }
+      if(!ja) pcs.push(p);
+    });
+    venc.pecas=pcs;
+    ["mecanico","desc","carreta","motorista","inicio","fim","tipo"].forEach(function(f){ if(!venc[f] && perd[f]) venc[f]=perd[f]; });
+    if(!venc.km && perd.km) venc.km=perd.km;
+    if(perd.baixado) venc.baixado=true;
+    venc.updatedAt=Math.max(venc.updatedAt||0, perd.updatedAt||0)+1;
+    tumbas.push({id:perd.id, cavalo:perd.cavalo, deleted:true, updatedAt:Date.now()});
+    porPlaca[k]=venc;
+  });
+  var usados={}; vivos.forEach(function(x){ usados[x.id]=1; });
+  ordem.forEach(function(k){
+    var m=porPlaca[k], novo=_idMK(m.cavalo);
+    var _pl=String(m.cavalo||"").toUpperCase().replace(/[\s\-\.]/g,"");
+    if(_pl && m.cavalo!==_pl){ m.cavalo=_pl; mudou++; }
+    if(m.id!==novo && !usados[novo]){
+      tumbas.push({id:m.id, cavalo:m.cavalo, deleted:true, updatedAt:Date.now()});
+      if(mkSel===m.id) mkSel=novo;
+      m.id=novo; m.updatedAt=Date.now(); mudou++;
+    }
+    usados[m.id]=1; vivos.push(m);
+  });
+  var vistos={}, tl=[];
+  for(var i=tumbas.length-1;i>=0;i--){
+    var t=tumbas[i];
+    if(!t || !t.id || vistos[t.id] || usados[t.id]) continue;
+    vistos[t.id]=1; tl.unshift(t);
+    if(tl.length>=200) break;
+  }
+  manutKanban=vivos.concat(tl);
+  if(mkSel && !mkFind(mkSel)) mkSel=null;
+  return mudou;
+}
+function mkFind(id){ for(var i=0;i<manutKanban.length;i++){ if(manutKanban[i] && manutKanban[i].id===id && !manutKanban[i].deleted) return manutKanban[i]; } return null; }
 function mkVeic(placa){ for(var i=0;i<frota.length;i++){ if(frota[i].cavalo===placa) return frota[i]; } return null; }
 function mkAgora(){ var d=new Date(); return d.toISOString().slice(0,16); }
 function mkFmtDT(v){ if(!v) return "--"; var p=String(v).split("T"); var d=p[0].split("-"); return d[2]+"/"+d[1]+"/"+d[0]+(p[1]?(" "+p[1].slice(0,5)):""); }
@@ -3995,17 +4082,28 @@ function salvarMK2(id){
   };
   if(id){
     var m=mkFind(id); if(!m) return;
+    var outro=mkPorPlaca(cav);
+    if(outro && outro.id!==id){ showToast(cav+" ja esta em outro cartao do quadro",true); return; }
     for(var k in dados) m[k]=dados[k];
     m.updatedAt=bumpTs(m);
   } else {
-    dados.id=uid(); dados.col="fila"; dados.ordem=manutKanban.length; dados.updatedAt=Date.now();
+    var jaTem=mkPorPlaca(cav);
+    if(jaTem){
+      closeModal();
+      showToast(cav+" ja esta no quadro - abrindo o cartao existente",true);
+      mkSel=jaTem.id; renderMK();
+      setTimeout(function(){ openMKModal(jaTem.id); },260);
+      return;
+    }
+    dados.id=_idMK(cav); dados.col="fila"; dados.ordem=mkAtivos().length; dados.updatedAt=Date.now();
     manutKanban.push(dados); mkSel=dados.id;
   }
   salvarMK(); closeModal(); renderMK(); showToast("Manutencao salva!");
 }
 function excluirMK(id){
   if(!confirm("Excluir este registro de manutencao?")) return;
-  manutKanban=manutKanban.filter(function(x){ return x.id!==id; });
+  var _m=mkFind(id);
+  if(_m){ _m.deleted=true; _m.updatedAt=Date.now(); }
   if(mkSel===id) mkSel=null;
   salvarMK(); closeModal(); renderMK(); showToast("Registro excluido");
 }
@@ -4032,7 +4130,8 @@ function mkSelecionar(id){ mkSel=id; renderMK(); }
 function renderMK(){
   var host=ge("mk-board"); if(!host) return;
   var fMec=gv("mk-f-mec")||"", fTipo=gv("mk-f-tipo")||"";
-  var mecs={}; manutKanban.forEach(function(x){ if(x.mecanico) mecs[x.mecanico]=1; });
+  try{ mkDedup(); }catch(e){}
+  var mecs={}; mkAtivos().forEach(function(x){ if(x.mecanico) mecs[x.mecanico]=1; });
   var selMec=ge("mk-f-mec");
   if(selMec) selMec.innerHTML='<option value="">Todos os mecanicos</option>'+Object.keys(mecs).sort().map(function(x){return '<option'+(fMec===x?" selected":"")+'>'+esc(x)+'</option>';}).join("");
   var selTipo=ge("mk-f-tipo");
@@ -4040,7 +4139,7 @@ function renderMK(){
 
   var html="";
   MK_COLS.forEach(function(c){
-    var itens=manutKanban.filter(function(m){
+    var itens=mkAtivos().filter(function(m){
       return m.col===c.k && (!fMec||m.mecanico===fMec) && (!fTipo||m.tipo===fTipo);
     }).sort(function(a,b){ return (a.ordem||0)-(b.ordem||0); });
     html+='<div class="k-col"><div class="k-head" style="background:'+c.bg+';color:'+c.c+'">'+c.ic+' '+c.lb+'<span>'+itens.length+'</span></div>'
@@ -4088,7 +4187,7 @@ function renderMKSide(){
     '<div style="display:flex;justify-content:space-between;align-items:flex-start"><div><h3 style="font-size:16px">'+esc(m.cavalo)+'</h3>'
     +'<div style="color:var(--m2);font-size:11.5px">'+esc(m.carreta||"sem carreta")+(m.motorista?(" &middot; "+esc(m.motorista)):"")+'</div></div>'
     +'<span class="mk-tag" style="background:'+cor+'22;color:'+cor+'">'+esc(m.tipo||"")+'</span></div>'
-    +'<div class="mk-fld"><div class="l">Ordem de Servico</div><div class="v">'+(m.os?('<span style="color:var(--blu);cursor:pointer" onclick="mkAbrirOS(\''+esc(m.os)+'\')">'+esc(m.os)+' &rarr;</span>'):'<span style="color:var(--mu)">nao vinculada</span>')+'</div>'
+    +'<div class="mk-fld"><div class="l">Ordens de Servico'+(mkOSNums(m.os).length>1?(' ('+mkOSNums(m.os).length+')'):'')+'</div><div class="v">'+mkOSLinks(m.os)+'</div>'
     +'<button class="btn btn-g" style="width:100%;justify-content:center;margin-top:7px;font-size:12px" onclick="mkGerarOS(\''+m.id+'\')">&#128220; '+(m.os?"Gerar outra OS":"Gerar OS automatica")+'</button></div>'
     +'<div class="mk-fld"><div class="l">Mecanico responsavel</div><div class="v">'+esc(m.mecanico||"--")+'</div></div>'
     +'<div class="mk-fld"><div class="l">Hodometro</div><div class="v">'+(m.km?Number(m.km).toLocaleString('pt-BR')+" km":"--")+'</div></div>'
@@ -4123,7 +4222,7 @@ function mkAbrirOS(num){
 function printMKReport(){
   function pad(x){ return (x<10?"0":"")+x; }
   var hoje=new Date();
-  var concl=manutKanban.filter(function(m){ return m.fim; });
+  var concl=mkAtivos().filter(function(m){ return m.fim; });
   if(!concl.length){ showToast("Nenhum servico concluido ainda",true); return; }
   function ini(v){ return new Date(v); }
   var hojeS=hoje.getFullYear()+"-"+pad(hoje.getMonth()+1)+"-"+pad(hoje.getDate());
@@ -6166,7 +6265,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 76 - DIAGNOSTICO DE SYNC</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 77 - 1 CARTAO POR PLACA</div>
   </div>
 </div>
 </body></html>
