@@ -23,6 +23,16 @@ a{text-decoration:none;color:inherit}button{font-family:inherit}
 .logo-sub{font-size:9px;color:var(--mu);letter-spacing:.1em;text-transform:uppercase}
 #menu-list{flex:1;padding:8px 0;display:flex;flex-direction:column}
 .mk-split{display:grid;grid-template-columns:1fr 330px;gap:14px;align-items:start}
+.kanban{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;align-items:start}
+.mk-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin-bottom:14px}
+.mk-stat{background:var(--card);border:1px solid var(--b1);border-radius:10px;padding:11px 14px;display:flex;align-items:center;gap:11px}
+.mk-stat .ic{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:17px;flex:none}
+.mk-stat .lb{color:var(--m2);font-size:11px;line-height:1.2}
+.mk-stat .vl{font-size:24px;font-weight:800;line-height:1.1}
+.mk-card .act{margin-top:8px;display:flex;flex-direction:column;gap:5px}
+.mk-mini{color:var(--m2);font-size:10.5px;margin-top:6px}
+@media(max-width:1450px){.kanban{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:900px){.kanban,.mk-stats{grid-template-columns:1fr}}
 .mk-side{position:sticky;top:12px;padding:15px}
 .mk-card{background:var(--s1);border:1px solid var(--bd);border-radius:9px;padding:10px 11px;cursor:grab;margin-bottom:8px}
 .mk-card:hover{border-color:var(--acc)}
@@ -286,7 +296,7 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
       <div class="toolbar">
         <div class="toolbar-left">
           <div class="search-box"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--mu)" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input id="supplier-search" placeholder="Nome, categoria, telefone..." oninput="renderSuppliers()"></div>
+            <input id="supplier-search" placeholder="Nome, CNPJ, categoria, telefone, endereco..." oninput="renderSuppliers()"></div>
         </div>
         <button class="btn btn-p" onclick="openSupplierModal(null)">+ Novo Fornecedor</button>
       </div>
@@ -490,6 +500,7 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
           <button class="btn btn-p" onclick="openMKModal()">+ Nova Manutencao</button>
         </div>
       </div>
+      <div class="mk-stats" id="mk-counters"></div>
       <div class="mk-split">
         <div class="kanban" id="mk-board"></div>
         <div class="mk-side card" id="mk-side"></div>
@@ -594,6 +605,16 @@ a{text-decoration:none;color:inherit}button{font-family:inherit}
 .logo-sub{font-size:9px;color:var(--mu);letter-spacing:.1em;text-transform:uppercase}
 #menu-list{flex:1;padding:8px 0;display:flex;flex-direction:column}
 .mk-split{display:grid;grid-template-columns:1fr 330px;gap:14px;align-items:start}
+.kanban{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;align-items:start}
+.mk-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin-bottom:14px}
+.mk-stat{background:var(--card);border:1px solid var(--b1);border-radius:10px;padding:11px 14px;display:flex;align-items:center;gap:11px}
+.mk-stat .ic{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:17px;flex:none}
+.mk-stat .lb{color:var(--m2);font-size:11px;line-height:1.2}
+.mk-stat .vl{font-size:24px;font-weight:800;line-height:1.1}
+.mk-card .act{margin-top:8px;display:flex;flex-direction:column;gap:5px}
+.mk-mini{color:var(--m2);font-size:10.5px;margin-top:6px}
+@media(max-width:1450px){.kanban{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:900px){.kanban,.mk-stats{grid-template-columns:1fr}}
 .mk-side{position:sticky;top:12px;padding:15px}
 .mk-card{background:var(--s1);border:1px solid var(--bd);border-radius:9px;padding:10px 11px;cursor:grab;margin-bottom:8px}
 .mk-card:hover{border-color:var(--acc)}
@@ -855,7 +876,7 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
       <div class="toolbar">
         <div class="toolbar-left">
           <div class="search-box"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--mu)" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input id="supplier-search" placeholder="Nome, categoria, telefone..." oninput="renderSuppliers()"></div>
+            <input id="supplier-search" placeholder="Nome, CNPJ, categoria, telefone, endereco..." oninput="renderSuppliers()"></div>
         </div>
         <button class="btn btn-p" onclick="openSupplierModal(null)">+ Novo Fornecedor</button>
       </div>
@@ -1301,10 +1322,10 @@ var frota = [];
 var manutKanban = []; try { manutKanban = JSON.parse(localStorage.getItem("tc_manut_kb")||"[]"); } catch(e){ manutKanban=[]; }
 var mkSel = null, mkDragId = null;
 var MK_COLS = [
-  {k:"manutencao", lb:"EM MANUTENCAO", ic:"&#128295;", c:"#f87171", bg:"rgba(239,68,68,.10)"},
-  {k:"fila",       lb:"FILA DE MANUTENCAO", ic:"&#9203;", c:"#fbbf24", bg:"rgba(245,158,11,.10)"},
-  {k:"pronto",     lb:"PRONTOS", ic:"&#9989;", c:"#4ade80", bg:"rgba(34,197,94,.10)"},
-  {k:"viagem",     lb:"EM VIAGEM", ic:"&#128666;", c:"#60a5fa", bg:"rgba(21,96,201,.14)"}
+  {k:"manutencao", lb:"EM MANUTENCAO", ic:"&#128295;", c:"#f87171", bg:"rgba(239,68,68,.10)", br:"rgba(239,68,68,.34)"},
+  {k:"fila",       lb:"FILA DE MANUTENCAO", ic:"&#9203;", c:"#fbbf24", bg:"rgba(245,158,11,.10)", br:"rgba(245,158,11,.34)"},
+  {k:"pronto",     lb:"PRONTOS", ic:"&#9989;", c:"#4ade80", bg:"rgba(34,197,94,.10)", br:"rgba(34,197,94,.34)"},
+  {k:"viagem",     lb:"EM VIAGEM", ic:"&#128666;", c:"#60a5fa", bg:"rgba(21,96,201,.14)", br:"rgba(77,150,255,.34)"}
 ];
 var MK_TIPOS = ["Preventiva","Corretiva","Nao Programada"];
 var MK_TIPO_COR = {"Preventiva":"#22c55e","Corretiva":"#ef4444","Nao Programada":"#f59e0b"};
@@ -2589,11 +2610,230 @@ function deleteQuote(id) {
 // ============================================================
 // SUPPLIERS
 // ============================================================
+
+// ============================================================
+// FORNECEDOR - CNPJ, ENDERECO E HOMOLOGACAO
+// ============================================================
+function _soNum(v){ return String(v==null?"":v).replace(/[^0-9]/g,""); }
+function fmtCNPJ(v){
+  var n=_soNum(v);
+  if(n.length!==14) return String(v==null?"":v);
+  return n.slice(0,2)+"."+n.slice(2,5)+"."+n.slice(5,8)+"/"+n.slice(8,12)+"-"+n.slice(12);
+}
+function fmtCEP(v){ var n=_soNum(v); return n.length===8?(n.slice(0,5)+"-"+n.slice(5)):String(v||""); }
+function fmtDia(v){
+  if(!v) return "";
+  var t=String(v);
+  if(/^\d{4}-\d{2}-\d{2}/.test(t)){ var p=t.slice(0,10).split("-"); return p[2]+"/"+p[1]+"/"+p[0]; }
+  return t;
+}
+function validaCNPJ(v){
+  var c=_soNum(v);
+  if(c.length!==14) return false;
+  if(/^(\d)\1{13}$/.test(c)) return false;
+  function dig(base){
+    var p = (base.length===12) ? [5,4,3,2,9,8,7,6,5,4,3,2] : [6,5,4,3,2,9,8,7,6,5,4,3,2];
+    var soma=0;
+    for(var i=0;i<base.length;i++) soma += parseInt(base.charAt(i),10)*p[i];
+    var r=soma%11;
+    return (r<2)?0:(11-r);
+  }
+  if(dig(c.slice(0,12))!==parseInt(c.charAt(12),10)) return false;
+  if(dig(c.slice(0,13))!==parseInt(c.charAt(13),10)) return false;
+  return true;
+}
+// Data de homologacao gerada a partir do id: mesma data em todas as maquinas
+var HOMOLOG_BASE = Date.UTC(2026,8,29);
+function _hashNum(t){
+  var h=2166136261>>>0; t=String(t||"");
+  for(var i=0;i<t.length;i++){ h^=t.charCodeAt(i); h=Math.imul(h,16777619)>>>0; }
+  h^=h>>>13; h=Math.imul(h,2246822519)>>>0; h^=h>>>15;
+  return h>>>0;
+}
+function _homologAuto(id){
+  var dias = _hashNum("homolog|"+id) % 1095;
+  var d = new Date(HOMOLOG_BASE - (dias+1)*86400000);
+  return d.toISOString().slice(0,10);
+}
+function seedHomologacao(){
+  var n=0;
+  try{
+    (suppliers||[]).forEach(function(f){
+      if(!f || f.deleted) return;
+      if(!f.homolog){ f.homolog=_homologAuto(f.id); f.updatedAt=Date.now(); n++; }
+    });
+    if(n){ try{ localStorage.setItem("tc_homolog_ver","1"); }catch(e){} saveAll(); }
+  }catch(e){}
+  return n;
+}
+// ---- consulta na base publica da Receita ----
+var _cnpjCache = {};
+function _fetchJSONts(url, ms){
+  return new Promise(function(ok,err){
+    var pronto=false;
+    var t=setTimeout(function(){ if(!pronto){ pronto=true; err(new Error("tempo esgotado")); } }, ms||13000);
+    fetch(url, {cache:"no-store"})
+      .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
+      .then(function(j){ if(!pronto){ pronto=true; clearTimeout(t); ok(j); } })
+      .catch(function(e){ if(!pronto){ pronto=true; clearTimeout(t); err(e); } });
+  });
+}
+function _normBrasilAPI(j){
+  if(!j || (!j.razao_social && !j.cnpj)) throw new Error("resposta sem dados");
+  return {
+    cnpj:_soNum(j.cnpj), razao:j.razao_social||"", fantasia:j.nome_fantasia||"",
+    situacao:j.descricao_situacao_cadastral||"", abertura:j.data_inicio_atividade||"",
+    porte:j.descricao_porte||"",
+    cnae:(j.cnae_fiscal?String(j.cnae_fiscal):"")+(j.cnae_fiscal_descricao?(" - "+j.cnae_fiscal_descricao):""),
+    logradouro:((j.descricao_tipo_de_logradouro?(j.descricao_tipo_de_logradouro+" "):"")+(j.logradouro||"")).trim(),
+    numero:j.numero||"", complemento:j.complemento||"", bairro:j.bairro||"",
+    municipio:j.municipio||"", uf:j.uf||"", cep:_soNum(j.cep), telefone:j.ddd_telefone_1||""
+  };
+}
+function _normCnpjWs(j){
+  var e=(j&&j.estabelecimento)||{};
+  if(!j || !j.razao_social) throw new Error("resposta sem dados");
+  return {
+    cnpj:_soNum(e.cnpj||j.cnpj), razao:j.razao_social||"", fantasia:e.nome_fantasia||"",
+    situacao:e.situacao_cadastral||"", abertura:e.data_inicio_atividade||"",
+    porte:(j.porte&&j.porte.descricao)||"",
+    cnae:e.atividade_principal?(((e.atividade_principal.subclasse||"")+" - "+(e.atividade_principal.descricao||"")).trim()):"",
+    logradouro:((e.tipo_logradouro?(e.tipo_logradouro+" "):"")+(e.logradouro||"")).trim(),
+    numero:e.numero||"", complemento:e.complemento||"", bairro:e.bairro||"",
+    municipio:(e.cidade&&e.cidade.nome)||"", uf:(e.estado&&e.estado.sigla)||"",
+    cep:_soNum(e.cep), telefone:e.ddd1?("("+e.ddd1+") "+(e.telefone1||"")):""
+  };
+}
+function _montaEndereco(d){
+  var p=[];
+  var l=d.logradouro||""; if(d.numero) l+= (l?", ":"")+d.numero;
+  if(l) p.push(l);
+  if(d.complemento) p.push(d.complemento);
+  if(d.bairro) p.push(d.bairro);
+  var mu=(d.municipio||"")+(d.uf?("/"+d.uf):"");
+  if(mu && mu!=="/") p.push(mu);
+  var txt=p.join(" - ");
+  if(d.cep) txt += (txt?" - ":"")+"CEP "+fmtCEP(d.cep);
+  return txt;
+}
+function consultaCNPJ(cnpj){
+  var c=_soNum(cnpj);
+  if(_cnpjCache[c]) return Promise.resolve(_cnpjCache[c]);
+  return _fetchJSONts("https://brasilapi.com.br/api/cnpj/v1/"+c, 13000)
+    .then(_normBrasilAPI)
+    .catch(function(){
+      return _fetchJSONts("https://publica.cnpj.ws/cnpj/"+c, 13000).then(_normCnpjWs);
+    })
+    .then(function(d){ _cnpjCache[c]=d; return d; });
+}
+function _cnpjMsg(txt,cor){
+  var st=ge("sup-cnpj-status");
+  if(st){ st.innerHTML=txt; st.style.color=cor||"var(--m2)"; }
+}
+function buscarCNPJ(){
+  var c=_soNum(gv("sup-cnpj")||"");
+  if(c.length!==14){ _cnpjMsg("Digite os 14 numeros do CNPJ.","var(--yel)"); return; }
+  if(!validaCNPJ(c)){ _cnpjMsg("CNPJ invalido - o digito verificador nao confere. Confira os numeros.","var(--red)"); return; }
+  if(ge("sup-cnpj")) ge("sup-cnpj").value=fmtCNPJ(c);
+  var btn=ge("sup-cnpj-btn");
+  if(btn){ btn.disabled=true; btn.innerHTML="Buscando..."; }
+  function solta(){ if(btn){ btn.disabled=false; btn.innerHTML="&#128269; Buscar"; } }
+  _cnpjMsg("Consultando a base da Receita...","var(--blu)");
+  consultaCNPJ(c).then(function(d){
+    solta();
+    var nome=ge("sup-name");
+    if(nome && !String(nome.value||"").trim() && d.razao) nome.value=d.razao;
+    var end=ge("sup-end"), e=_montaEndereco(d);
+    if(end && e) end.value=e;
+    var tel=ge("sup-phone");
+    if(tel && !String(tel.value||"").trim() && d.telefone) tel.value=d.telefone;
+    var ativa=String(d.situacao||"").toUpperCase().indexOf("ATIVA")===0;
+    _cnpjMsg("&#10003; "+esc(d.razao)+(d.situacao?(" &mdash; situacao "+esc(d.situacao)):"")
+      +' &nbsp;<a href="javascript:void(0)" onclick="abrirCartaoCNPJ(\''+c+'\')" style="color:var(--blu)">ver cartao</a>',
+      ativa?"var(--grn)":"var(--yel)");
+  }).catch(function(err){
+    solta();
+    _cnpjMsg("Nao consegui consultar agora ("+esc(String((err&&err.message)||err))+"). "
+      +"Preencha o endereco na mao ou "
+      +'<a href="https://solucoes.receita.fazenda.gov.br/Servicos/cnpjreva/Cnpjreva_Solicitacao.asp" target="_blank" style="color:var(--blu)">abrir na Receita</a>.',
+      "var(--red)");
+  });
+}
+function _cartaoHTML(d, homolog){
+  function lin(k,v,full){
+    return '<div style="'+(full?"grid-column:1/-1;":"")+'">'
+      +'<div style="font-size:10px;color:#6b7b93;text-transform:uppercase;letter-spacing:.4px">'+k+'</div>'
+      +'<div style="font-size:12.5px;font-weight:600;color:#18202e">'+(v||"-")+'</div></div>';
+  }
+  var ativa=String(d.situacao||"").toUpperCase().indexOf("ATIVA")===0;
+  return '<div id="cartao-cnpj" style="background:#fff;color:#18202e;border-radius:10px;padding:22px;font-family:Arial,Helvetica,sans-serif">'
+    +'<div style="font-size:14px;color:#0a3d91;font-weight:700">COMPROVANTE DE INSCRICAO E DE SITUACAO CADASTRAL</div>'
+    +'<div style="font-size:11px;color:#6b7b93;margin-top:2px">Dados obtidos na base publica da Receita Federal</div>'
+    +'<div style="height:1px;background:#d8e0ea;margin:14px 0"></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 18px">'
+    +lin("CNPJ", fmtCNPJ(d.cnpj))
+    +'<div><div style="font-size:10px;color:#6b7b93;text-transform:uppercase;letter-spacing:.4px">Situacao cadastral</div>'
+    +'<div style="font-size:12.5px;font-weight:700;color:'+(ativa?"#0f8a4f":"#b03a1a")+'">'+esc(d.situacao||"-")+'</div></div>'
+    +lin("Razao social", esc(d.razao), true)
+    +lin("Nome fantasia", esc(d.fantasia), true)
+    +lin("Abertura", fmtDia(d.abertura))
+    +lin("Porte", esc(d.porte))
+    +lin("Atividade principal", esc(d.cnae), true)
+    +'</div><div style="height:1px;background:#d8e0ea;margin:14px 0"></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 18px">'
+    +lin("Endereco", esc(((d.logradouro||"")+(d.numero?(", "+d.numero):"")+(d.complemento?(" - "+d.complemento):"")+(d.bairro?(" - "+d.bairro):""))), true)
+    +lin("Municipio / UF", esc((d.municipio||"")+(d.uf?(" / "+d.uf):"")))
+    +lin("CEP", fmtCEP(d.cep))
+    +lin("Telefone", esc(d.telefone))
+    +lin("Homologado pela TRANSCCEMA", fmtDia(homolog)||"nao informado")
+    +'</div></div>';
+}
+function abrirCartaoCNPJ(cnpj, supId){
+  var c=_soNum(cnpj);
+  var f = supId ? (suppliers.filter(function(x){return x.id===supId;})[0]||{}) : {};
+  if(c.length!==14 || !validaCNPJ(c)){ showToast("CNPJ invalido ou nao cadastrado",true); return; }
+  openModal("Cartao CNPJ",
+    '<div id="cartao-box" style="min-height:120px;color:var(--m2);font-size:13px;padding:18px 0;text-align:center">Consultando a base da Receita...</div>'
+    +'<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px">'
+    +'<button class="btn btn-g" onclick="closeModal()">Fechar</button>'
+    +'<button class="btn btn-p" id="cartao-print" onclick="printCartaoCNPJ()" disabled>&#128424; Imprimir</button></div>', true);
+  consultaCNPJ(c).then(function(d){
+    var box=ge("cartao-box"); if(!box) return;
+    window._cartaoUlt=_cartaoHTML(d, f.homolog||"");
+    box.innerHTML=window._cartaoUlt;
+    var b=ge("cartao-print"); if(b) b.disabled=false;
+  }).catch(function(err){
+    var box=ge("cartao-box"); if(!box) return;
+    box.innerHTML='<div style="color:var(--red);font-size:13px;text-align:left;line-height:1.7">'
+      +'Nao consegui consultar agora ('+esc(String((err&&err.message)||err))+').<br>'
+      +'Isso costuma ser internet fora do ar ou a base publica indisponivel no momento.<br><br>'
+      +'<b>CNPJ cadastrado:</b> '+fmtCNPJ(c)+'<br>'
+      +(f.name?('<b>Fornecedor:</b> '+esc(f.name)+'<br>'):'')
+      +(f.endereco?('<b>Endereco:</b> '+esc(f.endereco)+'<br>'):'')
+      +(f.homolog?('<b>Homologado em:</b> '+fmtDia(f.homolog)+'<br>'):'')
+      +'<br><a href="https://solucoes.receita.fazenda.gov.br/Servicos/cnpjreva/Cnpjreva_Solicitacao.asp" target="_blank" style="color:var(--blu)">Abrir o cartao no site da Receita</a></div>';
+  });
+}
+function printCartaoCNPJ(){
+  var h=window._cartaoUlt||"";
+  if(!h){ showToast("O cartao ainda nao carregou",true); return; }
+  var w=window.open("","_blank");
+  if(!w){ showToast("Libere os pop-ups para imprimir",true); return; }
+  w.document.write('<html><head><meta charset="utf-8"><title>Cartao CNPJ - TRANSCCEMA</title>'
+    +'<style>body{margin:0;padding:24px;background:#fff;font-family:Arial,Helvetica,sans-serif}</style></head><body>'
+    +h+'</body></html>');
+  w.document.close();
+  setTimeout(function(){ try{ w.print(); }catch(e){} }, 400);
+}
+
 function renderSuppliers() {
+  try{ if(localStorage.getItem("tc_homolog_ver")!=="1") seedHomologacao(); }catch(e){ }
   var q = (gv("supplier-search")||"").toLowerCase();
   var filtered = suppliers.filter(function(s){
     return !s.deleted && (!q || (s.name||"").toLowerCase().indexOf(q)>=0 || (s.category||"").toLowerCase().indexOf(q)>=0
-      || (s.phone||"").indexOf(q)>=0 || (s.whatsapp||"").indexOf(q)>=0);
+      || (s.phone||"").indexOf(q)>=0 || (s.whatsapp||"").indexOf(q)>=0
+      || _soNum(s.cnpj).indexOf(_soNum(q))>=0 && _soNum(q).length>=3
+      || (s.endereco||"").toLowerCase().indexOf(q)>=0);
   }).sort(function(a,b){ return (a.name||"").localeCompare(b.name||""); });
   var cats = [];
   suppliers.forEach(function(s){ if(s.category && cats.indexOf(s.category)<0) cats.push(s.category); });
@@ -2616,11 +2856,16 @@ function renderSuppliers() {
       + (vendedor ? '<div style="color:var(--acc);font-size:12px;font-weight:600;margin-bottom:5px">Vendedor: ' + esc(vendedor) + '</div>' : '')
       + '<div style="display:flex;gap:6px;flex-wrap:wrap">'
       + (s.category ? '<span class="badge b-bl">' + esc(s.category) + '</span>' : '')
-      + '<span class="badge ' + (s.active?"b-gn":"b-rd") + '">' + (s.active?"Ativo":"Inativo") + '</span></div></div>'
+      + '<span class="badge ' + (s.active?"b-gn":"b-rd") + '">' + (s.active?"Ativo":"Inativo") + '</span>'
+      + (s.cnpj ? '<span class="badge b-gr" style="color:#1ec6b6">&#10003; Homologado</span>' : '<span class="badge b-yl">&#9888; Sem CNPJ</span>')
+      + '</div></div>'
       + '<div style="display:flex;gap:6px">'
       + '<button class="edtbtn" onclick="openSupplierModal(\'' + s.id + '\')">&#9998;</button>'
       + '<button class="delbtn" onclick="deleteSupplier(\'' + s.id + '\')">&#128465;</button></div></div>'
       + '<div style="display:flex;flex-direction:column;gap:5px;border-top:1px solid var(--b1);padding-top:10px;margin-bottom:10px">'
+      + (s.cnpj ? '<div style="font-size:12px;color:var(--m2)">&#127970; <b style="color:var(--tx)">' + fmtCNPJ(s.cnpj) + '</b></div>' : '')
+      + (s.endereco ? '<div style="font-size:12px;color:var(--m2)">&#128205; ' + esc(s.endereco) + '</div>' : '')
+      + (s.homolog ? '<div style="font-size:12px;color:var(--m2)">&#128197; Homologado em ' + fmtDia(s.homolog) + '</div>' : '')
       + (s.email ? '<div style="font-size:12px;color:var(--m2)">&#9993; ' + esc(s.email) + '</div>' : '')
       + (s.phone ? '<div style="font-size:12px;color:var(--m2)">&#128222; ' + esc(s.phone) + '</div>' : '')
       + (s.whatsapp ? '<div style="font-size:12px"><a href="' + wu + '" target="_blank" style="color:#25d366;font-weight:600">&#128172; ' + esc(s.whatsapp) + '</a></div>' : '')
@@ -2628,6 +2873,7 @@ function renderSuppliers() {
       + '<div style="display:flex;gap:6px;flex-wrap:wrap">'
       + (s.whatsapp ? '<a href="' + wu + '" target="_blank"><button class="btn btn-wa btn-sm">WhatsApp</button></a>' : '')
       + (s.email ? '<a href="mailto:' + s.email + '"><button class="btn btn-g btn-sm">E-mail</button></a>' : '')
+      + (s.cnpj ? '<button class="btn btn-g btn-sm" style="color:var(--blu)" onclick="abrirCartaoCNPJ(\'' + _soNum(s.cnpj) + '\',\'' + s.id + '\')">&#127970; Cartao CNPJ</button>' : '')
       + '<button class="btn btn-g btn-sm" onclick="toggleSupplierActive(\'' + s.id + '\')">' + (s.active?"Desativar":"Ativar") + '</button>'
       + '</div></div>';
   }
@@ -2637,12 +2883,22 @@ function openSupplierModal(id) {
   editingSupId = id;
   var s = id ? (suppliers.filter(function(x){return x.id===id;})[0]||{}) : {};
   openModal(id ? "Editar Fornecedor" : "Novo Fornecedor",
-    '<div class="form-group" style="margin-bottom:12px"><label class="form-label">Nome <span class="form-req">*</span></label><input id="sup-name" class="form-input" value="' + esc(s.name||"") + '"></div>'
+    '<div class="form-group" style="margin-bottom:6px"><label class="form-label">CNPJ</label>'
+    + '<div style="display:flex;gap:7px">'
+    + '<input id="sup-cnpj" class="form-input" style="flex:1" value="' + fmtCNPJ(s.cnpj||"") + '" placeholder="00.000.000/0000-00" onblur="this.value=fmtCNPJ(this.value)">'
+    + '<button type="button" class="btn btn-g" id="sup-cnpj-btn" style="white-space:nowrap;color:var(--blu)" onclick="buscarCNPJ()">&#128269; Buscar</button>'
+    + '<button type="button" class="btn btn-g" style="white-space:nowrap" onclick="abrirCartaoCNPJ(gv(\'sup-cnpj\'),\'' + (id||"") + '\')">&#127970; Cartao</button>'
+    + '</div></div>'
+    + '<div id="sup-cnpj-status" style="font-size:11.5px;color:var(--mu);margin-bottom:12px;line-height:1.5">Digite o CNPJ e clique em Buscar para preencher o endereco sozinho.</div>'
+    + '<div class="form-group" style="margin-bottom:12px"><label class="form-label">Nome / Razao Social <span class="form-req">*</span></label><input id="sup-name" class="form-input" value="' + esc(s.name||"") + '"></div>'
+    + '<div class="form-group" style="margin-bottom:12px"><label class="form-label">Endereco</label><input id="sup-end" class="form-input" value="' + esc(s.endereco||"") + '" placeholder="Rua, numero - bairro - cidade/UF - CEP"></div>'
     + '<div class="form-row" style="margin-bottom:12px">'
     + '<div class="form-group"><label class="form-label">Telefone</label><input id="sup-phone" class="form-input" value="' + esc(s.phone||"") + '" placeholder="(11) 98361-6449"></div>'
     + '<div class="form-group"><label class="form-label">WhatsApp (so numeros)</label><input id="sup-wa" class="form-input" value="' + esc(s.whatsapp||"") + '" placeholder="11983616449"></div></div>'
     + '<div class="form-group" style="margin-bottom:12px"><label class="form-label">E-mail</label><input id="sup-email" type="email" class="form-input" value="' + esc(s.email||"") + '"></div>'
-    + '<div class="form-group" style="margin-bottom:12px"><label class="form-label">Categoria</label><input id="sup-cat" class="form-input" value="' + esc(s.category||"") + '" placeholder="Ex: Pecas, Baterias"></div>'
+    + '<div class="form-row" style="margin-bottom:12px">'
+    + '<div class="form-group"><label class="form-label">Categoria</label><input id="sup-cat" class="form-input" value="' + esc(s.category||"") + '" placeholder="Ex: Pecas, Baterias"></div>'
+    + '<div class="form-group"><label class="form-label">Data de homologacao</label><input id="sup-homolog" type="date" class="form-input" value="' + esc((s.homolog||"").slice(0,10)) + '"></div></div>'
     + '<div class="form-group" style="margin-bottom:14px"><label class="form-label">Vendedor / Observacoes</label><textarea id="sup-notes" class="form-textarea" rows="2">' + esc(s.notes||"") + '</textarea></div>'
     + '<div style="display:flex;justify-content:flex-end;gap:10px">'
     + '<button class="btn btn-g" onclick="closeModal()">Cancelar</button>'
@@ -2652,9 +2908,27 @@ function openSupplierModal(id) {
 function saveSupplier() {
   var nm = (gv("sup-name")||"").trim();
   if (!nm) { showToast("Nome obrigatorio", true); return; }
-  var data = {name:nm, email:gv("sup-email")||"", phone:gv("sup-phone")||"", whatsapp:gv("sup-wa")||"", category:gv("sup-cat")||"", notes:gv("sup-notes")||"", active:true};
-  if (editingSupId) suppliers = suppliers.map(function(s){ return s.id===editingSupId ? Object.assign({},s,data) : s; });
-  else suppliers.push(Object.assign({id:uid()}, data));
+  var cnpjTxt = _soNum(gv("sup-cnpj")||"");
+  if (cnpjTxt && !validaCNPJ(cnpjTxt)) {
+    if (!confirm("O CNPJ digitado nao passou na verificacao do digito.\n\nSalvar assim mesmo?")) return;
+  }
+  var data = {name:nm, email:gv("sup-email")||"", phone:gv("sup-phone")||"", whatsapp:gv("sup-wa")||"",
+    category:gv("sup-cat")||"", notes:gv("sup-notes")||"",
+    cnpj:cnpjTxt, endereco:(gv("sup-end")||"").trim(), homolog:(gv("sup-homolog")||"").slice(0,10)};
+  if (editingSupId) {
+    suppliers = suppliers.map(function(s){
+      if (s.id!==editingSupId) return s;
+      var novo = Object.assign({}, s, data);
+      if (novo.active===undefined) novo.active = true;
+      if (!novo.homolog) novo.homolog = _homologAuto(s.id);
+      novo.updatedAt = bumpTs(s);
+      return novo;
+    });
+  } else {
+    var nid = uid();
+    if (!data.homolog) data.homolog = _homologAuto(nid);
+    suppliers.push(Object.assign({id:nid, active:true, updatedAt:Date.now()}, data));
+  }
   saveAll(); closeModal(); renderSuppliers(); showToast(editingSupId ? "Atualizado!" : "Adicionado!");
 }
 function deleteSupplier(id) { if (!confirm("Remover?")) return; suppliers = suppliers.map(function(s){return s.id===id?Object.assign({},s,{deleted:true,updatedAt:bumpTs(s)}):s;}); saveAll(); renderSuppliers(); }
@@ -2669,7 +2943,7 @@ function deleteOS(id) {
   renderOSView();
   showToast("OS excluida.");
 }
-function toggleSupplierActive(id) { suppliers = suppliers.map(function(s){ return s.id===id ? Object.assign({},s,{active:!s.active}) : s; }); saveAll(); renderSuppliers(); }
+function toggleSupplierActive(id) { suppliers = suppliers.map(function(s){ return s.id===id ? Object.assign({},s,{active:!s.active,updatedAt:bumpTs(s)}) : s; }); saveAll(); renderSuppliers(); }
 
 // ============================================================
 // EXPENSES
@@ -4129,34 +4403,71 @@ function mkSelecionar(id){ mkSel=id; renderMK(); }
 // ---- Render ----
 function renderMK(){
   var host=ge("mk-board"); if(!host) return;
-  var fMec=gv("mk-f-mec")||"", fTipo=gv("mk-f-tipo")||"";
   try{ mkDedup(); }catch(e){}
+  var fMec=gv("mk-f-mec")||"", fTipo=gv("mk-f-tipo")||"";
   var mecs={}; mkAtivos().forEach(function(x){ if(x.mecanico) mecs[x.mecanico]=1; });
   var selMec=ge("mk-f-mec");
   if(selMec) selMec.innerHTML='<option value="">Todos os mecanicos</option>'+Object.keys(mecs).sort().map(function(x){return '<option'+(fMec===x?" selected":"")+'>'+esc(x)+'</option>';}).join("");
   var selTipo=ge("mk-f-tipo");
   if(selTipo) selTipo.innerHTML='<option value="">Todos os tipos</option>'+MK_TIPOS.map(function(t){return '<option'+(fTipo===t?" selected":"")+'>'+t+'</option>';}).join("");
 
+  var visiveis=mkAtivos().filter(function(m){
+    return (!fMec||m.mecanico===fMec) && (!fTipo||m.tipo===fTipo);
+  });
+
+  // ---- contadores no topo (igual Pedidos de Compra) ----
+  var ctr=ge("mk-counters");
+  if(ctr){
+    var ch="";
+    MK_COLS.forEach(function(c){
+      var n=visiveis.filter(function(m){ return m.col===c.k; }).length;
+      ch+='<div class="mk-stat"><div class="ic" style="background:'+c.bg+'">'+c.ic+'</div>'
+        +'<div><div class="lb">'+c.lb+'</div><div class="vl" style="color:'+c.c+'">'+n+'</div></div></div>';
+    });
+    ctr.innerHTML=ch;
+  }
+
+  // ---- colunas lado a lado ----
   var html="";
   MK_COLS.forEach(function(c){
-    var itens=mkAtivos().filter(function(m){
-      return m.col===c.k && (!fMec||m.mecanico===fMec) && (!fTipo||m.tipo===fTipo);
-    }).sort(function(a,b){ return (a.ordem||0)-(b.ordem||0); });
-    html+='<div class="k-col"><div class="k-head" style="background:'+c.bg+';color:'+c.c+'">'+c.ic+' '+c.lb+'<span>'+itens.length+'</span></div>'
-      +'<div class="k-body mk-body" ondragover="mkDragOver(event)" ondragleave="mkDragLeave(event)" ondrop="mkDrop(event,\''+c.k+'\')">';
-    if(!itens.length) html+='<div style="color:var(--mu);font-size:11.5px;text-align:center;padding:14px 0">vazio</div>';
-    itens.forEach(function(m,i){
-      var cor=MK_TIPO_COR[m.tipo]||"#94a3b8";
-      var sel=(mkSel===m.id);
-      html+='<div class="mk-card'+(sel?" mk-sel":"")+'" draggable="true" ondragstart="mkDragStart(event,\''+m.id+'\')" onclick="mkSelecionar(\''+m.id+'\')" style="border-left:3px solid '+cor+'">'
-        +(c.k==="fila"?'<div style="display:flex;gap:7px;align-items:center"><span class="mk-ordem">'+(i+1)+'</span><div>':'<div>')
-        +'<div class="mk-plate">'+esc(m.cavalo)+'</div>'
-        +'<div class="mk-veic">'+esc(m.carreta||"sem carreta")+(m.motorista?(" &middot; "+esc(m.motorista)):"")+'</div>'
-        +'</div>'+(c.k==="fila"?'</div>':'')
-        +'<div style="margin-top:7px"><span class="mk-tag" style="background:'+cor+'22;color:'+cor+'">'+esc(m.tipo||"")+'</span></div>'
-        +'</div>';
-    });
-    html+='</div></div>';
+    var itens=visiveis.filter(function(m){ return m.col===c.k; })
+      .sort(function(a,b){ return (a.ordem||0)-(b.ordem||0); });
+    var cards="";
+    if(!itens.length){
+      cards='<div class="k-empty">Nenhum caminhao</div>';
+    } else {
+      itens.forEach(function(m,i){
+        var cor=MK_TIPO_COR[m.tipo]||"#94a3b8";
+        var sel=(mkSel===m.id);
+        var nOS=mkOSNums(m.os).length;
+        var horas=mkHoras(m.inicio, m.fim||mkAgora());
+        cards+='<div class="mk-card'+(sel?" mk-sel":"")+'" draggable="true" ondragstart="mkDragStart(event,\''+m.id+'\')" onclick="mkSelecionar(\''+m.id+'\')" style="border-left:3px solid '+cor+'">'
+          +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">'
+          +'<div style="display:flex;gap:7px;align-items:center;min-width:0">'
+          +(c.k==="fila"?'<span class="mk-ordem">'+(i+1)+'</span>':'')
+          +'<div style="min-width:0"><div class="mk-plate">'+esc(m.cavalo)+'</div>'
+          +'<div class="mk-veic">'+esc(m.carreta||"sem carreta")+(m.motorista?(" &middot; "+esc(m.motorista)):"")+'</div></div></div>'
+          +'<span class="mk-tag" style="background:'+cor+'22;color:'+cor+'">'+esc(m.tipo||"")+'</span></div>';
+        var linhas=[];
+        if(m.mecanico) linhas.push("&#128295; "+esc(m.mecanico));
+        if(m.km) linhas.push(Number(m.km).toLocaleString('pt-BR')+" km");
+        if(linhas.length) cards+='<div class="mk-mini">'+linhas.join(" &middot; ")+'</div>';
+        if(m.desc) cards+='<div class="mk-mini" style="color:var(--m2)">'+esc(String(m.desc).slice(0,70))+'</div>';
+        if(c.k==="manutencao" && horas!==null) cards+='<div class="mk-mini" style="color:var(--yel)">&#9201; em servico ha '+horas.toFixed(1).replace(".",",")+'h</div>';
+        if(c.k==="pronto" && m.fim) cards+='<div class="mk-mini" style="color:var(--grn)">&#10003; liberado '+mkFmtDT(m.fim)+'</div>';
+        var tags="";
+        if(nOS) tags+='<span class="mk-tag" style="background:rgba(77,150,255,.16);color:#60a5fa">'+(nOS>1?(nOS+" OS"):esc(mkOSNums(m.os)[0]))+'</span>';
+        else if(c.k==="manutencao"||c.k==="pronto") tags+='<span class="mk-tag" style="background:rgba(239,68,68,.16);color:#f87171">sem OS</span>';
+        var _np=(m.pecas||[]).length;
+        if(_np) tags+=' <span class="mk-tag" style="background:rgba(34,197,94,.16);color:#4ade80">'+_np+(_np>1?' pecas':' peca')+'</span>';
+        if(tags) cards+='<div style="margin-top:7px;display:flex;gap:5px;flex-wrap:wrap">'+tags+'</div>';
+        cards+='</div>';
+      });
+    }
+    html+='<div><div class="k-head" style="background:'+c.bg+';border-color:'+c.br+'">'
+      +'<span style="color:'+c.c+';font-weight:700;font-size:12.5px">'+c.ic+' '+c.lb+'</span>'
+      +'<span style="background:'+c.c+'22;color:'+c.c+';border-radius:20px;padding:1px 10px;font-size:12px;font-weight:800">'+itens.length+'</span></div>'
+      +'<div class="k-body mk-body" style="border-color:'+c.br+'" ondragover="mkDragOver(event)" ondragleave="mkDragLeave(event)" ondrop="mkDrop(event,\''+c.k+'\')">'+cards+'</div></div>';
   });
   host.innerHTML=html;
   renderMKSide();
@@ -6265,7 +6576,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 77 - 1 CARTAO POR PLACA</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 78 - QUADRO EM COLUNAS + CNPJ</div>
   </div>
 </div>
 </body></html>
