@@ -203,6 +203,9 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
     <div id="page-title">Dashboard</div>
     <div style="display:flex;align-items:center;gap:8px">
       <span style="color:var(--m2);font-size:12px" id="date-display"></span>
+      <button class="btn btn-ok" id="top-sync-btn" style="padding:6px 13px;font-size:11.5px;white-space:nowrap;font-weight:700" title="Envia o que foi feito aqui e traz o que os outros fizeram" onclick="manualSync()">&#8635; Sincronizar</button>
+      <span id="top-sync-label" style="font-size:11px;color:var(--mu);white-space:nowrap"></span>
+      <button class="btn btn-g" style="padding:6px 11px;font-size:11.5px;white-space:nowrap" title="Salva uma copia dos dados deste computador" onclick="abrirBackupsLocais()">&#128190; Backup</button>
       <div style="display:flex;align-items:center;gap:8px">
         <span id="topbar-username" style="font-size:12px;color:var(--m2)"></span>
         <div id="topbar-avatar" style="width:32px;height:32px;border-radius:50%;background:var(--acc);display:flex;align-items:center;justify-content:center;font-weight:700;cursor:pointer" onclick="fazerLogout()" title="Clique para sair">T</div>
@@ -561,6 +564,7 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
         <div style="color:var(--m2);font-size:13px;margin-bottom:14px">Exporte todos os dados como arquivo JSON para backup ou compartilhar com outra pessoa.</div>
         <div style="display:flex;gap:10px;flex-wrap:wrap">
           <button class="btn btn-p" onclick="exportData()">&#8659; Exportar JSON (Backup)</button>
+          <button class="btn btn-g" onclick="abrirBackupsLocais()">&#128190; Backups automaticos</button>
           <label class="btn btn-g" style="cursor:pointer">&#8657; Importar JSON <input type="file" accept=".json" onchange="importData(event)" style="display:none"></label>
         </div>
         <div id="import-result" style="font-size:12px;color:var(--m2);margin-top:8px;min-height:18px"></div>
@@ -805,6 +809,9 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
     <div id="page-title">Dashboard</div>
     <div style="display:flex;align-items:center;gap:8px">
       <span style="color:var(--m2);font-size:12px" id="date-display"></span>
+      <button class="btn btn-ok" id="top-sync-btn" style="padding:6px 13px;font-size:11.5px;white-space:nowrap;font-weight:700" title="Envia o que foi feito aqui e traz o que os outros fizeram" onclick="manualSync()">&#8635; Sincronizar</button>
+      <span id="top-sync-label" style="font-size:11px;color:var(--mu);white-space:nowrap"></span>
+      <button class="btn btn-g" style="padding:6px 11px;font-size:11.5px;white-space:nowrap" title="Salva uma copia dos dados deste computador" onclick="abrirBackupsLocais()">&#128190; Backup</button>
       <div style="display:flex;align-items:center;gap:8px">
         <span id="topbar-username" style="font-size:12px;color:var(--m2)"></span>
         <div id="topbar-avatar" style="width:32px;height:32px;border-radius:50%;background:var(--acc);display:flex;align-items:center;justify-content:center;font-weight:700;cursor:pointer" onclick="fazerLogout()" title="Clique para sair">T</div>
@@ -1139,6 +1146,7 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
         <div style="color:var(--m2);font-size:13px;margin-bottom:14px">Exporte todos os dados como arquivo JSON para backup ou compartilhar com outra pessoa.</div>
         <div style="display:flex;gap:10px;flex-wrap:wrap">
           <button class="btn btn-p" onclick="exportData()">&#8659; Exportar JSON (Backup)</button>
+          <button class="btn btn-g" onclick="abrirBackupsLocais()">&#128190; Backups automaticos</button>
           <label class="btn btn-g" style="cursor:pointer">&#8657; Importar JSON <input type="file" accept=".json" onchange="importData(event)" style="display:none"></label>
         </div>
         <div id="import-result" style="font-size:12px;color:var(--m2);margin-top:8px;min-height:18px"></div>
@@ -3490,6 +3498,10 @@ function setSyncStatus(color, text) {
   var dot = ge("sync-dot"), lbl = ge("sync-label");
   if (dot) dot.style.background = color;
   if (lbl) lbl.textContent = text;
+  var t = ge("top-sync-label");
+  if (t) { t.textContent = text || ""; t.style.color = color || "var(--mu)"; }
+  var b = ge("top-sync-btn");
+  if (b) b.disabled = (String(text||"").indexOf("...") >= 0);
 }
 function showSyncResult(msg, ok) {
   var el = ge("sync-result"); if (!el) return;
@@ -3812,7 +3824,11 @@ function pullFromServer(callback) {
 
 
 function manualSync() {
-  if (!syncUrl) { showToast("Configure a URL do sync nas Configuracoes", true); gotoSection("settings"); return; }
+  if (!syncUrl) {
+    showToast("Sincronizacao nao configurada neste computador - avise o Felipe", true);
+    if (currentUser && currentUser.role === "admin") gotoSection("settings");
+    return;
+  }
   setSyncStatus("var(--yel)", "Salvando no Sheets...");
   // Primeiro salva (push), depois verifica se ha dados mais recentes (pull)
   pushToServer(function(ok, msg) {
@@ -3865,6 +3881,152 @@ saveAll = function() {
 
 // ============================================================
 // EXPORT / IMPORT
+
+// ============================================================
+// BACKUP AUTOMATICO NESTA MAQUINA
+// Antes da primeira sincronizacao do dia, cada computador guarda uma
+// copia dos proprios dados. Se o servidor perder algo, da para voltar
+// sem depender de ninguem.
+// ============================================================
+var SNAP_PREFIXO = "tc_snap_";
+var SNAP_MAX = 3;
+function _snapHoje(){
+  var d=new Date();
+  return d.getFullYear()+"-"+("0"+(d.getMonth()+1)).slice(-2)+"-"+("0"+d.getDate()).slice(-2);
+}
+function listarSnapshots(){
+  var L=[];
+  try{
+    for(var i=0;i<localStorage.length;i++){
+      var k=localStorage.key(i);
+      if(k && k.indexOf(SNAP_PREFIXO)===0){
+        var txt=localStorage.getItem(k)||"";
+        L.push({chave:k, dia:k.slice(SNAP_PREFIXO.length), bytes:txt.length});
+      }
+    }
+  }catch(e){}
+  L.sort(function(a,b){ return b.dia.localeCompare(a.dia); });
+  return L;
+}
+function _podarSnapshots(){
+  var L=listarSnapshots();
+  while(L.length>SNAP_MAX){
+    var velho=L.pop();
+    try{ localStorage.removeItem(velho.chave); }catch(e){}
+  }
+}
+function criarSnapshot(forcado){
+  var chave=SNAP_PREFIXO+_snapHoje();
+  try{
+    if(!forcado && localStorage.getItem(chave)) return false;   // o de hoje ja existe
+    var d=packData();
+    d.manutKanban=manutKanban||[];
+    d.frota=frota||[];
+    d.osData=osData||[];
+    d.criadoEm=Date.now();
+    var txt=JSON.stringify(d);
+    try{
+      localStorage.setItem(chave, txt);
+    }catch(e1){
+      // sem espaco: joga fora o mais antigo e tenta de novo uma vez
+      var L=listarSnapshots();
+      if(L.length){ try{ localStorage.removeItem(L[L.length-1].chave); }catch(e2){} }
+      try{ localStorage.setItem(chave, txt); }catch(e3){ return false; }
+    }
+    _podarSnapshots();
+    return true;
+  }catch(e){ return false; }
+}
+function _resumoSnap(d){
+  function n(x){ return (x instanceof Array) ? x.length : 0; }
+  var p=[];
+  p.push(n(d.orders)+" pedidos");
+  p.push((n(d.manut)+n(d.adminExp))+" despesas");
+  p.push(n(d.osData||d.osDelta)+" OS");
+  p.push(n(d.almoxMovs)+" movimentacoes");
+  p.push(n(d.manutKanban)+" manutencoes");
+  p.push(n(d.suppliers)+" fornecedores");
+  return p.join(" &middot; ");
+}
+function abrirBackupsLocais(){
+  var L=listarSnapshots();
+  var linhas=L.map(function(x){
+    var d={};
+    try{ d=JSON.parse(localStorage.getItem(x.chave)||"{}"); }catch(e){}
+    var p=x.dia.split("-");
+    return '<tr>'
+      +'<td style="padding:8px 10px;border-top:1px solid var(--b1);font-weight:700">'+p[2]+'/'+p[1]+'/'+p[0]+'</td>'
+      +'<td style="padding:8px 10px;border-top:1px solid var(--b1);font-size:11.5px;color:var(--m2)">'+_resumoSnap(d)+'</td>'
+      +'<td style="padding:8px 10px;border-top:1px solid var(--b1);text-align:right;white-space:nowrap">'
+      +'<button class="btn btn-g btn-sm" onclick="baixarSnapshot(\''+x.chave+'\')">&#8659; Baixar</button> '
+      +'<button class="btn btn-p btn-sm" onclick="restaurarSnapshot(\''+x.chave+'\')">Restaurar</button></td></tr>';
+  }).join("");
+  openModal("Backups automaticos desta maquina",
+    '<div style="font-size:13px;line-height:1.7;margin-bottom:12px">'
+    +'Todo dia, antes da primeira sincronizacao, este computador guarda uma copia dos proprios dados. '
+    +'Ficam os <b>'+SNAP_MAX+' ultimos dias</b>.'
+    +'<br><span style="color:var(--yel)">Restaurar troca os dados desta maquina pelos do backup. Depois e so sincronizar para subir.</span></div>'
+    +(L.length
+      ? ('<div style="border:1px solid var(--b1);border-radius:8px;overflow:hidden"><table style="width:100%;border-collapse:collapse;font-size:12.5px">'
+        +'<thead><tr style="background:var(--s2)"><th style="text-align:left;padding:8px 10px;font-size:11px;color:var(--m2)">Dia</th>'
+        +'<th style="text-align:left;padding:8px 10px;font-size:11px;color:var(--m2)">O que tem dentro</th><th></th></tr></thead>'
+        +'<tbody>'+linhas+'</tbody></table></div>')
+      : '<div style="color:var(--mu);font-size:13px;padding:16px 4px">Nenhum backup ainda. O primeiro e criado automaticamente hoje.</div>')
+    +'<div style="display:flex;justify-content:space-between;gap:10px;margin-top:14px;flex-wrap:wrap">'
+    +'<button class="btn btn-p" onclick="exportData()">&#8659; Baixar tudo agora</button>'
+    +'<div style="display:flex;gap:10px">'
+    +'<button class="btn btn-g" onclick="criarSnapshot(true)?showToast(\'Backup de hoje refeito!\'):showToast(\'Nao consegui salvar\',true);abrirBackupsLocais()">Refazer o backup de hoje</button>'
+    +'<button class="btn btn-g" onclick="closeModal()">Fechar</button></div></div>', true);
+}
+function baixarSnapshot(chave){
+  try{
+    var txt=localStorage.getItem(chave)||"";
+    if(!txt){ showToast("Backup vazio",true); return; }
+    var blob=new Blob([txt],{type:"application/json"});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement("a");
+    a.href=url; a.download="TRANSCCEMA_"+chave.replace(SNAP_PREFIXO,"backup_")+".json";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast("Backup baixado!");
+  }catch(e){ showToast("Erro ao baixar: "+e,true); }
+}
+function restaurarSnapshot(chave){
+  var d=null;
+  try{ d=JSON.parse(localStorage.getItem(chave)||"null"); }catch(e){}
+  if(!d){ showToast("Backup ilegivel",true); return; }
+  if(!confirm("Restaurar os dados do dia "+chave.slice(SNAP_PREFIXO.length)+"?\n\n"
+    +"O que estiver nesta maquina e trocado pelo backup.\n"
+    +"Nada e enviado para as outras maquinas ate voce clicar em Sincronizar.")) return;
+  try{
+    if(d.suppliers) suppliers=d.suppliers;
+    if(d.orders)    orders=d.orders;
+    if(d.manut)     manut=d.manut;
+    if(d.adminExp)  adminExp=d.adminExp;
+    if(d.quotes)    quotes=d.quotes;
+    if(d.almoxMovs) almoxMovs=d.almoxMovs;
+    if(d.osData)    osData=d.osData;
+    else if(d.osDelta) osData=mergeOSById(osData, d.osDelta);
+    if(d.manutKanban) manutKanban=d.manutKanban;
+    if(d.frota && d.frota.length) frota=d.frota;
+    if(d.almoxDelta || d.almoxNovos){
+      almoxItems=deepCopy(DEFAULT_ALMOX);
+      if(d.almoxDelta) Object.keys(d.almoxDelta).forEach(function(id){
+        for(var i=0;i<almoxItems.length;i++){ if(almoxItems[i].id===id){ Object.assign(almoxItems[i], d.almoxDelta[id]); break; } }
+      });
+      if(d.almoxNovos){
+        var ex={}; almoxItems.forEach(function(x){ if(x&&x.id!=null) ex[x.id]=1; });
+        d.almoxNovos.forEach(function(it){ if(it&&it.id!=null&&!ex[it.id]) almoxItems.push(it); });
+      }
+    }
+    try{ localStorage.setItem("tc_os_data", JSON.stringify(osData)); }catch(e){}
+    try{ localStorage.setItem("tc_manut_kb", JSON.stringify(manutKanban)); }catch(e){}
+    try{ localStorage.setItem("tc_frota", JSON.stringify(frota)); }catch(e){}
+    saveAll(); closeModal(); refreshCurrentSection();
+    alert("Dados restaurados nesta maquina.\n\nConfira na tela. Se estiver certo, clique em Sincronizar para subir para as outras maquinas.");
+  }catch(e){ alert("Nao consegui restaurar:\n"+e); }
+}
+
 function exportData() {
   var data = getAllData();
   var blob = new Blob([data], {type: "application/json"});
@@ -6893,6 +7055,7 @@ function carregarSessao() {
 function salvarSessao(user) {
   currentUser = user;
   sessionStorage.setItem(SESSION_KEY, JSON.stringify(user));
+  try{ criarSnapshot(false); }catch(e){}
 }
 
 function hashSimples(str) {
@@ -7405,7 +7568,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 83 - OS PUXA CARRETA E MOTORISTA</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 86 - SINCRONIZAR E BACKUP PARA TODOS</div>
   </div>
 </div>
 </body></html>
