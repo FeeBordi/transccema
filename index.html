@@ -235,6 +235,7 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
           <div class="search-box"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--mu)" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             <input id="order-search" placeholder="Buscar pedido..." oninput="renderOrders()">
           </div>
+          <button class="btn btn-g" style="padding:8px 12px;font-size:12px" onclick="abrirPedidosExcluidos()">&#128465; Excluidos</button>
           <select id="order-periodo" class="form-select" style="width:auto;padding:8px 12px;font-size:12px" onchange="renderOrders()">
             <option value="">Todo periodo</option>
             <option value="hoje">Hoje</option>
@@ -836,6 +837,7 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
           <div class="search-box"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--mu)" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             <input id="order-search" placeholder="Buscar pedido..." oninput="renderOrders()">
           </div>
+          <button class="btn btn-g" style="padding:8px 12px;font-size:12px" onclick="abrirPedidosExcluidos()">&#128465; Excluidos</button>
           <select id="order-periodo" class="form-select" style="width:auto;padding:8px 12px;font-size:12px" onchange="renderOrders()">
             <option value="">Todo periodo</option>
             <option value="hoje">Hoje</option>
@@ -2065,6 +2067,7 @@ function attachDragListeners() {
 function ehSoLeitura() { return !!(currentUser && currentUser.readonly === true); }
 
 function renderOrders() {
+  try{ aplicarMortosOrd(); }catch(e){}
   var q = (gv("order-search")||"").toLowerCase();
   var fp = gv("order-periodo")||"";
   var filtered = orders.filter(function(o) {
@@ -2170,13 +2173,90 @@ function saveNewOrder() {
   });
   saveAll(); closeModal(); renderOrders(); showToast("Pedido criado!");
 }
+
+// ============================================================
+// EXCLUSAO DEFINITIVA DE PEDIDO
+// O pedido excluido fica numa lista propria nesta maquina. Depois de
+// qualquer sincronizacao, essa lista e reaplicada - entao pedido excluido
+// nao volta nem se outra maquina reenviar a versao viva dele.
+// ============================================================
+var ORD_MORTOS = {};
+try {
+  (JSON.parse(localStorage.getItem("tc_ord_mortos")||"[]")||[]).forEach(function(x){
+    if(x && x.id) ORD_MORTOS[x.id]=x;
+  });
+} catch(e){ ORD_MORTOS={}; }
+function _listaMortos(){ return Object.keys(ORD_MORTOS).map(function(k){ return ORD_MORTOS[k]; }); }
+function salvarMortos(){
+  try{ localStorage.setItem("tc_ord_mortos", JSON.stringify(_listaMortos())); }catch(e){}
+}
+function marcarMortoOrd(o){
+  if(!o || !o.id) return;
+  ORD_MORTOS[o.id] = {id:o.id, num:o.num||"", desc:String(o.description||"").slice(0,90),
+                      valor:o.estimatedValue||o.finalValue||0, ts:Date.now()};
+  salvarMortos();
+}
+function aplicarMortosOrd(){
+  var n=0;
+  (orders||[]).forEach(function(o){
+    if(o && o.id && ORD_MORTOS[o.id] && !o.deleted){
+      o.deleted=true; o.updatedAt=Date.now(); n++;
+    }
+  });
+  return n;
+}
+function restaurarPedidoMorto(id){
+  if(!ORD_MORTOS[id]) return;
+  if(!confirm("Trazer este pedido de volta para o quadro?")) return;
+  delete ORD_MORTOS[id]; salvarMortos();
+  var achou=false;
+  orders=(orders||[]).map(function(o){
+    if(o && o.id===id){ achou=true; return Object.assign({},o,{deleted:false, updatedAt:Date.now()}); }
+    return o;
+  });
+  saveAll(); renderOrders(); closeModal();
+  showToast(achou ? "Pedido restaurado!" : "Tirado da lista de excluidos - ele volta na proxima sincronizacao.");
+}
+function abrirPedidosExcluidos(){
+  var L=_listaMortos().sort(function(a,b){ return (b.ts||0)-(a.ts||0); });
+  if(!L.length){
+    openModal("Pedidos excluidos",
+      '<div style="padding:18px 4px;font-size:13.5px;color:var(--m2);line-height:1.7">Nenhum pedido foi excluido nesta maquina.</div>'
+      +'<div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn btn-g" onclick="closeModal()">Fechar</button></div>', true);
+    return;
+  }
+  var linhas=L.map(function(x){
+    return '<tr>'
+      +'<td style="padding:7px 9px;border-top:1px solid var(--b1);font-weight:700;font-size:12px">'+esc(x.num||"-")+'</td>'
+      +'<td style="padding:7px 9px;border-top:1px solid var(--b1);font-size:12px;color:var(--m2)">'+esc(x.desc||"")+'</td>'
+      +'<td style="padding:7px 9px;border-top:1px solid var(--b1);font-size:11.5px;color:var(--mu);white-space:nowrap">'+(x.ts?new Date(x.ts).toLocaleDateString("pt-BR"):"")+'</td>'
+      +'<td style="padding:7px 9px;border-top:1px solid var(--b1);text-align:right">'
+      +'<button class="btn btn-g btn-sm" onclick="restaurarPedidoMorto(\''+x.id+'\')">Restaurar</button></td></tr>';
+  }).join("");
+  openModal("Pedidos excluidos ("+L.length+")",
+    '<div style="font-size:13px;color:var(--m2);line-height:1.7;margin-bottom:12px">'
+    +'Estes pedidos foram excluidos e nao voltam mais, nem se outra maquina reenviar. '
+    +'Se algum foi excluido por engano, clique em Restaurar.</div>'
+    +'<div style="max-height:46vh;overflow:auto;border:1px solid var(--b1);border-radius:8px">'
+    +'<table style="width:100%;border-collapse:collapse"><thead><tr style="background:var(--s2)">'
+    +'<th style="text-align:left;padding:7px 9px;font-size:11px;color:var(--m2)">Numero</th>'
+    +'<th style="text-align:left;padding:7px 9px;font-size:11px;color:var(--m2)">Descricao</th>'
+    +'<th style="text-align:left;padding:7px 9px;font-size:11px;color:var(--m2)">Excluido em</th>'
+    +'<th></th></tr></thead><tbody>'+linhas+'</tbody></table></div>'
+    +'<div style="display:flex;justify-content:flex-end;margin-top:14px"><button class="btn btn-g" onclick="closeModal()">Fechar</button></div>', true);
+}
+
 function deleteOrder(id) {
   if (!confirm("Deseja excluir este pedido? Esta acao nao pode ser desfeita.")) return;
   // Tombstone: marca como deletado para a exclusao se propagar no sync
+  var alvo=null;
+  for(var i=0;i<orders.length;i++){ if(orders[i] && orders[i].id===id){ alvo=orders[i]; break; } }
+  marcarMortoOrd(alvo||{id:id});
   orders = orders.map(function(o){
     return o.id === id ? Object.assign({}, o, {deleted:true, updatedAt:bumpTs(o)}) : o;
   });
-  saveAll(); renderOrders(); showToast("Pedido excluido.");
+  saveAll(); renderOrders();
+  showToast("Pedido excluido. Nao volta mais - se precisar, use o botao Excluidos.");
 }
 function _parsePecasPedido(desc){
   var linhas = String(desc||"").split(/\r?\n/).map(function(x){return x.trim();}).filter(Boolean);
@@ -3622,6 +3702,7 @@ function pushToServer(callback) {
     // 3. Atualiza local com merged
     suppliers = merged.suppliers;
     orders    = merged.orders;
+    try{ aplicarMortosOrd(); merged.orders = orders; }catch(e){}
     manut     = merged.manut;
     adminExp  = merged.adminExp;
     quotes    = merged.quotes;
@@ -3680,7 +3761,7 @@ function pullFromServer(callback) {
     }
     // Merge remote + local
     if (rd.suppliers && rd.suppliers.length > 0) suppliers = mergeById(suppliers, rd.suppliers);
-    if (rd.orders    && rd.orders.length    > 0) orders    = mergeById(orders,    rd.orders);
+    if (rd.orders    && rd.orders.length    > 0) { orders = mergeById(orders, rd.orders); try{ aplicarMortosOrd(); }catch(e){} }
     if (rd.manut     && rd.manut.length     > 0) manut     = mergeById(manut,     rd.manut);
     if (rd.adminExp  && rd.adminExp.length  > 0) adminExp  = mergeById(adminExp,  rd.adminExp);
     if (rd.quotes    && rd.quotes.length    > 0) quotes    = mergeById(quotes,    rd.quotes);
@@ -4053,7 +4134,7 @@ function mkGerarOS(id, a){
   var dt = (r.inicio||"").slice(0,10) || today();
   var novaOS = {
     i: uid(), n: num, st: "Em Aberto", col: "entrada",
-    pl: placa, veic: a, plCav: m.cavalo||"", plCar: m.carreta||"",
+    pl: placa, veic: a, plCav: m.cavalo||"", plCar: m.carreta||"", mot: m.motorista||"",
     fa: "TRANSCCEMA", mo: "Interno", ca: (a==="car"?"Carreta":"Cavalo Mecanico"),
     so: (r.mecanico||""), ho: (r.km||0), pr: "Normal", ti: 1,
     classe: (r.tipo||"Corretiva"),
@@ -5510,61 +5591,191 @@ function restaurarPecas(){
   saveAll(); renderAlmox(); if(typeof updateBadgesAlmox==="function") updateBadgesAlmox();
   alert("Restauracao concluida:\n\n"+reexib+" peca(s) voltaram a aparecer\n"+recriadas+" peca(s) recriadas\n"+saldos+" saldo(s) zerados voltaram ao valor de cadastro\n\nConfira as quantidades contra a prateleira e ajuste o que estiver diferente.");
 }
-function conferirDuplicatas(){
-  var porId={}; almoxItems.forEach(function(it){ if(it&&it.id!=null) porId[it.id]=it; });
-  var linhas="", n=0;
-  DUP_GRUPOS.forEach(function(g,idx){
-    var ids=[g.p].concat(g.s||[]);
-    var membros=ids.map(function(id){return porId[id];}).filter(Boolean);
-    if(!membros.length) return;
-    var soma=membros.reduce(function(a,x){ return a + (x.deleted?0:(parseInt(x.saldo,10)||0)); },0);
-    var orig=(g.t||0);
-    var sugestao=orig;
-    var inflado=(soma>orig*2 && orig>0);
-    var detalhe=membros.map(function(x){
-      return (x.deleted?'<span style="color:var(--mu);text-decoration:line-through">':'<span>')+(parseInt(x.saldo,10)||0)+'</span>';
-    }).join(' + ');
-    linhas+='<tr>'
-      +'<td style="padding:5px 7px;border-top:1px solid var(--bd);font-size:12px">'+esc(g.n||membros[0].produto)+'</td>'
-      +'<td style="padding:5px 7px;border-top:1px solid var(--bd);text-align:center;font-size:12px;color:'+(inflado?"var(--red)":"var(--m2)")+'">'+detalhe+(inflado?' &#9888;':'')+'</td>'
-      +'<td style="padding:5px 7px;border-top:1px solid var(--bd);text-align:center;font-size:12px;color:var(--m2)">'+orig+'</td>'
-      +'<td style="padding:5px 7px;border-top:1px solid var(--bd);text-align:center"><input id="cd-q-'+idx+'" type="number" min="0" value="" placeholder="digite" style="width:72px;padding:4px 6px;font-size:12px;background:var(--s2);border:1px solid var(--bd);color:var(--tx);border-radius:5px;text-align:center"></td>'
-      +'</tr>';
+function _movsDoItem(id){
+  var n=0, ult="", ent=0, sai=0;
+  (almoxMovs||[]).forEach(function(v){
+    if(!v || v.deleted || v.itemId!==id) return;
     n++;
+    var q=Number(v.qtd)||0;
+    if(v.tipo==="saida") sai+=q; else ent+=q;
+    var d=String(v.data||"");
+    if(d>ult) ult=d;
   });
-  if(!n){ showToast("Nenhuma peca duplicada encontrada nesta maquina"); return; }
-  openModal("Conferir Pecas Duplicadas ("+n+")",
-    '<div style="color:var(--m2);font-size:12.5px;margin-bottom:10px">Cada linha e a MESMA peca cadastrada 2x &mdash; nao sao estoques diferentes, entao <b>nao se soma</b>. <b>Saldos hoje</b> mostra o que cada cadastro tem gravado (so referencia). <b>Digite a quantidade real</b> da prateleira na ultima coluna. <b>Linha deixada em branco nao e alterada</b>, entao da pra fazer aos poucos. Ao aplicar, fica <b>uma peca so</b> com a quantidade que voce informou.</div>'
-    +'<div style="max-height:340px;overflow:auto;border:1px solid var(--bd);border-radius:8px"><table style="width:100%;border-collapse:collapse">'
-    +'<thead><tr style="background:var(--s2)"><th style="text-align:left;padding:6px 7px;font-size:11px;color:var(--m2)">Peca</th><th style="padding:6px 7px;font-size:11px;color:var(--m2)">Saldos hoje</th><th style="padding:6px 7px;font-size:11px;color:var(--m2)">Base</th><th style="padding:6px 7px;font-size:11px;color:var(--m2)">Quantidade correta</th></tr></thead>'
-    +'<tbody>'+linhas+'</tbody></table></div>'
-    +'<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px"><button class="btn btn-g" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="aplicarConferencia()">Aplicar</button></div>'
-  , true);
+  return {n:n, ult:ult, ent:ent, sai:sai};
 }
-function aplicarConferencia(){
-  var porId={}; almoxItems.forEach(function(it){ if(it&&it.id!=null) porId[it.id]=it; });
+// Encontra duplicadas pelo NOME, em qualquer local, sem depender de lista fixa
+function dupGruposVivos(){
+  var map={};
+  (almoxItems||[]).forEach(function(it){
+    if(!it || it.deleted) return;
+    var k=_normNome(it.produto)+"|"+(it.local||"SP");
+    if(!k) return;
+    (map[k]=map[k]||[]).push(it);
+  });
+  var g=[];
+  Object.keys(map).forEach(function(k){
+    if(map[k].length<2) return;
+    var itens=map[k].slice().sort(function(a,b){
+      var ma=_movsDoItem(a.id), mb=_movsDoItem(b.id);
+      if(mb.n!==ma.n) return mb.n-ma.n;                       // quem tem mais movimento primeiro
+      return (parseInt(b.saldo,10)||0)-(parseInt(a.saldo,10)||0);
+    });
+    g.push({nome:itens[0].produto, local:(itens[0].local||"SP"), itens:itens});
+  });
+  g.sort(function(a,b){ return String(a.nome).localeCompare(String(b.nome)); });
+  return g;
+}
+function conferirDuplicatas(){
+  var G=dupGruposVivos();
+  window._dupG=G;
+  if(!G.length){
+    openModal("Conferir Pecas Duplicadas",
+      '<div style="padding:18px 4px;font-size:13.5px;color:var(--grn);line-height:1.7">&#10003; <b>Nenhuma peca duplicada.</b><br>'
+      +'<span style="color:var(--m2)">Conferi todas as pecas do almoxarifado pelo nome, nos dois locais.</span></div>'
+      +'<div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn btn-g" onclick="closeModal()">Fechar</button></div>', true);
+    return;
+  }
+  var linhas=G.map(function(g,idx){
+    var soma=0;
+    var cols=g.itens.map(function(it,k){
+      var mv=_movsDoItem(it.id);
+      var sal=parseInt(it.saldo,10)||0;
+      soma+=sal;
+      return '<div style="background:var(--s2);border-radius:7px;padding:7px 9px;flex:1;min-width:132px">'
+        +'<div style="font-size:19px;font-weight:800;color:'+(sal?"var(--grn)":"var(--mu)")+'">'+sal+' <span style="font-size:11px;color:var(--m2)">'+esc(it.unidade||"Un")+'</span></div>'
+        +'<div style="font-size:11px;color:var(--m2);margin-top:2px">'+fmtR(it.custoMedio||0)+' cada</div>'
+        +'<div style="font-size:10.5px;color:var(--mu);margin-top:3px">'
+        +(mv.n? (mv.n+" movimentacao(oes)"+(mv.ult?(" &middot; ult. "+fmtDia(mv.ult)):"")) : "sem movimentacao")+'</div>'
+        +'<button type="button" class="btn btn-g btn-sm" style="width:100%;justify-content:center;margin-top:6px"'
+        +' onclick="dupEscolher('+idx+','+sal+')">Ficar com '+sal+'</button></div>';
+    }).join("");
+    var comMov=g.itens.filter(function(it){ return _movsDoItem(it.id).n>0; }).length;
+    var dica = (comMov===0)
+      ? 'Nenhuma das fichas teve movimentacao &mdash; sao so dois cadastros da mesma peca.'
+      : (comMov===1
+        ? 'So uma das fichas teve movimentacao &mdash; a outra e provavelmente cadastro repetido.'
+        : 'As duas tiveram movimentacao &mdash; confira no estoque fisico antes de decidir.');
+    return '<div style="border:1px solid var(--b1);border-radius:9px;padding:12px;margin-bottom:10px">'
+      +'<div style="font-weight:700;font-size:13px;margin-bottom:3px">'+esc(g.nome)+'</div>'
+      +'<div style="font-size:11px;color:var(--mu);margin-bottom:9px">'+esc(g.local)+' &middot; '+dica+'</div>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap">'+cols+'</div>'
+      +'<div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">'
+      +'<button type="button" class="btn btn-g btn-sm" onclick="dupEscolher('+idx+','+soma+')">Somar = '+soma+'</button>'
+      +'<span style="font-size:12px;color:var(--m2)">ou a quantidade real:</span>'
+      +'<input id="dup-q-'+idx+'" type="number" min="0" placeholder="--" class="form-input" style="width:92px;text-align:center;padding:6px">'
+      +'<span id="dup-st-'+idx+'" style="font-size:11.5px;color:var(--mu)">deixar em branco = nao mexe nesta peca</span>'
+      +'</div></div>';
+  }).join("");
+  openModal("Conferir Pecas Duplicadas ("+G.length+")",
+    '<div style="font-size:13px;line-height:1.7;margin-bottom:12px">'
+    +'Cada bloco e a <b>mesma peca cadastrada duas vezes</b>. Escolha com qual quantidade ela deve ficar &mdash; '
+    +'a outra ficha some e o historico dela passa para a que ficar.'
+    +'<br><span style="color:var(--yel)">Quem voce deixar em branco nao e alterado.</span></div>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--s2);border-radius:8px;padding:9px 11px;margin-bottom:12px">'
+    +'<span style="font-size:12px;color:var(--m2)">Para resolver tudo de uma vez:</span>'
+    +'<button type="button" class="btn btn-g btn-sm" onclick="dupPreencherTodas(\'soma\')">Somar as duas fichas</button>'
+    +'<button type="button" class="btn btn-g btn-sm" onclick="dupPreencherTodas(\'maior\')">Ficar com a maior</button>'
+    +'<button type="button" class="btn btn-g btn-sm" onclick="dupPreencherTodas(\'limpar\')">Limpar tudo</button>'
+    +'<span style="font-size:11px;color:var(--mu)">preenche os campos &mdash; nada muda ate voce clicar em Aplicar</span></div>'
+    +'<div style="max-height:52vh;overflow:auto">'+linhas+'</div>'
+    +'<div style="display:flex;justify-content:space-between;gap:10px;margin-top:14px">'
+    +'<button class="btn btn-g" onclick="printDuplicadas()">&#128424; Imprimir para conferir no estoque</button>'
+    +'<div style="display:flex;gap:10px"><button class="btn btn-g" onclick="closeModal()">Fechar sem mexer</button>'
+    +'<button class="btn btn-p" onclick="aplicarDuplicadas()">Aplicar</button></div></div>', true);
+}
+function dupPreencherTodas(modo){
+  var G=window._dupG||[];
+  G.forEach(function(g,idx){
+    var el=ge("dup-q-"+idx), st=ge("dup-st-"+idx);
+    if(!el) return;
+    if(modo==="limpar"){
+      el.value="";
+      if(st){ st.textContent="deixar em branco = nao mexe nesta peca"; st.style.color="var(--mu)"; }
+      return;
+    }
+    var qs=g.itens.map(function(it){ return parseInt(it.saldo,10)||0; });
+    var q=(modo==="soma") ? qs.reduce(function(a,b){return a+b;},0) : Math.max.apply(null,qs);
+    el.value=q;
+    if(st){ st.textContent="vai ficar com "+q; st.style.color="var(--grn)"; }
+  });
+  showToast(modo==="limpar" ? "Campos limpos" : "Preenchido - confira antes de aplicar");
+}
+function dupEscolher(idx, q){
+  var el=ge("dup-q-"+idx); if(!el) return;
+  el.value=q;
+  var st=ge("dup-st-"+idx);
+  if(st){ st.textContent="vai ficar com "+q; st.style.color="var(--grn)"; }
+}
+function aplicarDuplicadas(){
+  var G=window._dupG||[];
+  var alvo=[];
+  G.forEach(function(g,idx){
+    var el=ge("dup-q-"+idx); if(!el) return;
+    var v=String(el.value).trim(); if(v==="") return;
+    var q=parseInt(v,10); if(isNaN(q)||q<0) return;
+    alvo.push({g:g, q:q});
+  });
+  if(!alvo.length){ showToast("Nenhuma peca marcada",true); return; }
+  if(!confirm("Unificar "+alvo.length+" peca(s)?\n\nA ficha repetida some e o historico dela passa para a que fica.")) return;
   var stamp=function(o){ o.updatedAt=(typeof bumpTs==="function")?bumpTs(o):Date.now(); };
-  var mudou=0;
-  DUP_GRUPOS.forEach(function(g,idx){
-    var el=ge("cd-q-"+idx); if(!el) return;
-    if(String(el.value).trim()==="") return;
-    var q=parseInt(el.value,10); if(isNaN(q)||q<0) return;
-    var ids=[g.p].concat(g.s||[]);
-    var membros=ids.map(function(id){return porId[id];}).filter(Boolean);
-    if(!membros.length) return;
-    var fica=porId[g.p];
-    if(!fica){ membros.sort(function(a,b){return (parseInt(b.saldo,10)||0)-(parseInt(a.saldo,10)||0);}); fica=membros[0]; }
-    membros.forEach(function(x){
+  var feitos=0;
+  alvo.forEach(function(a){
+    var fica=a.g.itens[0];
+    if(!fica) return;
+    a.g.itens.forEach(function(x){
       if(x===fica) return;
+      // leva o historico da ficha repetida para a que fica
+      (almoxMovs||[]).forEach(function(v){
+        if(v && v.itemId===x.id){ v.itemId=fica.id; v.updatedAt=Date.now(); }
+      });
+      // leva tambem as pecas lancadas em manutencoes e OS
+      (manutKanban||[]).forEach(function(m){
+        if(!m) return;
+        ["cav","car"].forEach(function(al){
+          var r=(al==="car")?(m.car||{}):m;
+          ["pecas","baixaAplicada"].forEach(function(campo){
+            (r[campo]||[]).forEach(function(p){ if(p && p.itemId===x.id) p.itemId=fica.id; });
+          });
+        });
+        m.updatedAt=Date.now();
+      });
+      (osData||[]).forEach(function(o){
+        if(!o || !o.pecas) return;
+        o.pecas.forEach(function(p){ if(p && p.itemId===x.id){ p.itemId=fica.id; o.updatedAt=Date.now(); } });
+      });
       x.deleted=true; x.saldo=0; x.valorEstoque=0; stamp(x);
     });
     fica.deleted=false;
-    fica.saldo=q;
-    fica.valorEstoque=Math.round(q*(fica.custoMedio||0)*100)/100;
-    stamp(fica); mudou++;
+    fica.saldo=a.q;
+    fica.valorEstoque=Math.round(a.q*(fica.custoMedio||0)*100)/100;
+    stamp(fica); feitos++;
   });
-  saveAll(); closeModal(); renderAlmox(); if(typeof updateBadgesAlmox==="function") updateBadgesAlmox();
-  showToast(mudou+" peca(s) ajustada(s) e unificada(s)!");
+  try{ localStorage.setItem("tc_os_data", JSON.stringify(osData)); }catch(e){}
+  try{ salvarMK(); }catch(e){}
+  saveAll(); closeModal(); renderAlmox();
+  if(typeof updateBadgesAlmox==="function") updateBadgesAlmox();
+  showToast(feitos+" peca(s) unificada(s)!");
+}
+function printDuplicadas(){
+  var G=window._dupG||[];
+  if(!G.length){ showToast("Nada para imprimir",true); return; }
+  var w=window.open("","_blank");
+  if(!w){ showToast("Libere os pop-ups para imprimir",true); return; }
+  var linhas=G.map(function(g){
+    var q=g.itens.map(function(it){ return (parseInt(it.saldo,10)||0); });
+    return '<tr><td>'+esc(g.nome)+'</td><td>'+esc(g.local)+'</td><td style="text-align:center">'+q.join(" e ")
+      +'</td><td style="text-align:center">'+q.reduce(function(a,b){return a+b;},0)+'</td><td style="width:90px"></td></tr>';
+  }).join("");
+  w.document.write('<html><head><meta charset="utf-8"><title>Pecas duplicadas - TRANSCCEMA</title>'
+    +'<style>body{font-family:Arial,Helvetica,sans-serif;padding:22px;color:#111}h1{font-size:17px;margin:0 0 4px}'
+    +'p{font-size:12px;color:#555;margin:0 0 14px}table{width:100%;border-collapse:collapse}'
+    +'th,td{border:1px solid #ccc;padding:7px 8px;font-size:11.5px;text-align:left}th{background:#eef2f7}</style></head><body>'
+    +'<h1>Pecas cadastradas em duplicidade</h1>'
+    +'<p>TRANSCCEMA &mdash; '+new Date().toLocaleString("pt-BR")+' &mdash; '+G.length+' peca(s). Confira no estoque e anote a quantidade real na ultima coluna.</p>'
+    +'<table><thead><tr><th>Peca</th><th>Local</th><th>Fichas</th><th>Soma</th><th>Quantidade real</th></tr></thead>'
+    +'<tbody>'+linhas+'</tbody></table></body></html>');
+  w.document.close();
+  setTimeout(function(){ try{ w.print(); }catch(e){} },400);
 }
 function limparDuplicatasPreview(){
   var grupos=detectarDuplicatas();
@@ -6037,6 +6248,7 @@ function renderOSKanban() {
       return '<div class="k-card" style="border-left-color:'+col.c+'" data-oi="'+o.i+'">'
         +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">'
         +'<span class="os-placa-k" data-pl="'+esc(o.pl)+'" style="font-size:15px;font-weight:800;color:var(--acc);cursor:pointer;letter-spacing:.06em">'+esc(o.pl)+'</span> '+osSeloVeic(o)
+        +(o.mot?('<div style="font-size:11px;color:var(--m2);margin-top:2px">'+esc(o.mot)+'</div>'):'')
         +'<span style="font-size:10px;font-weight:700;color:'+col.c+';background:'+col.bg+';padding:2px 6px;border-radius:3px;white-space:nowrap">#'+esc(o.n)+'</span>'
         +'</div>'
         +'<div style="font-size:11px;color:var(--tx);font-weight:600;margin-bottom:3px">'+esc(o.fa)+' '+esc(o.mo)+'</div>'
@@ -6096,6 +6308,7 @@ function editarOS(id){
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
     +'<div><div class="form-label">Placa atendida</div><input class="form-input" id="edos-placa" value="'+av(o.pl)+'" oninput="this.value=this.value.toUpperCase()"></div>'
     +'<div><div class="form-label">'+(o.veic==="car"?"Cavalo":"Carreta")+' acoplad'+(o.veic==="car"?"o":"a")+'</div><input class="form-input" id="edos-par" value="'+av(o.veic==="car"?(o.plCav||""):(o.plCar||""))+'" oninput="this.value=this.value.toUpperCase()"></div>'
+    +'<div><div class="form-label">Motorista</div><input class="form-input" id="edos-mot" value="'+av(o.mot||"")+'"></div>'
     +'<div><div class="form-label">Hodometro (km)</div><input class="form-input" id="edos-km" type="number" value="'+(o.ho||0)+'"></div>'
     +'</div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
@@ -6123,6 +6336,7 @@ function salvarEdicaoOS(id){
   o.pl=pl;
   var par=(ge("edos-par")?ge("edos-par").value:"").trim().toUpperCase().replace(/[\s\-\.]/g,"");
   if(o.veic==="car"){ o.plCar=pl; o.plCav=par; } else { o.plCav=pl; o.plCar=par; }
+  if(ge("edos-mot")) o.mot=ge("edos-mot").value.trim();
   o.ho=parseInt(ge("edos-km")?ge("edos-km").value:"0",10)||0;
   o.fa=(ge("edos-fa")?ge("edos-fa").value:"").trim();
   o.mo=(ge("edos-mo")?ge("edos-mo").value:"").trim();
@@ -6190,6 +6404,7 @@ function abrirOS(id) {
     +'<div style="font-size:22px;font-weight:800;color:var(--acc);letter-spacing:.08em">'+esc(o.pl)+' '+osSeloVeic(o)+'</div>'
     +'<div style="font-size:12px;color:var(--m2)">'+esc(o.fa)+' '+esc(o.mo)+'</div>'
     +((o.veic==="car"?o.plCav:o.plCar) ? ('<div style="font-size:11.5px;color:var(--m2);margin-top:5px">'+(o.veic==="car"?"Cavalo":"Carreta")+' acoplad'+(o.veic==="car"?"o":"a")+': <b style="color:var(--tx)">'+esc(o.veic==="car"?o.plCav:o.plCar)+'</b></div>') : '')
+    +(o.mot ? ('<div style="font-size:11.5px;color:var(--m2);margin-top:3px">Motorista: <b style="color:var(--tx)">'+esc(o.mot)+'</b></div>') : '')
     +'</div>'
     +'<div class="card-sm"><div class="form-label">STATUS</div><div style="font-size:15px;font-weight:700;color:'+cor+'">'+esc(o.st)+'</div><div style="font-size:12px;color:var(--m2)">'+TIPO[o.ti]+(o.classe?' | '+esc(o.classe):'')+(o.pr?' | Prioridade: '+esc(o.pr):'')+'</div></div>'
     +'</div>'
@@ -6240,36 +6455,6 @@ function getUltimoKMPlaca(placa) {
   return osPlaca[0].ho || 0;
 }
 
-function validarPlacaNOS() {
-  var placa = ge("nos-placa") ? ge("nos-placa").value.toUpperCase().replace(/[\s\-\.]/g,'') : "";
-  var infoEl = ge("nos-placa-info");
-  var kmEl   = ge("nos-km");
-  if (!placa || !infoEl) return;
-
-  var info = getInfoPlaca(placa);
-  if (!info) {
-    infoEl.style.color = "var(--red)";
-    infoEl.textContent = "Placa nao encontrada na frota TRANSCCEMA!";
-    return;
-  }
-
-  // Tipo do veiculo
-  infoEl.style.color = "var(--grn)";
-  infoEl.textContent = "Frota TRANSCCEMA | " + info.tipo;
-
-  // Preenche ultimo KM
-  var ultimo = getUltimoKMPlaca(placa);
-  if (ultimo > 0 && kmEl && !kmEl.value) {
-    kmEl.value = ultimo;
-    var warn = ge("nos-km-warn");
-    if (warn) {
-      warn.style.display = "block";
-      warn.style.color = "var(--m2)";
-      warn.textContent = "Ultimo KM registrado: " + Number(ultimo).toLocaleString("pt-BR") + " km";
-    }
-  }
-}
-
 function preencherUltimoKM() {
   var placa = ge("nos-placa") ? ge("nos-placa").value.toUpperCase() : "";
   if (!placa) return;
@@ -6286,6 +6471,54 @@ function preencherUltimoKM() {
   }
 }
 
+// Acha o conjunto na lista de caminhoes, pela placa do cavalo ou da carreta
+// Se a pessoa digitar primeiro a carreta, completa o cavalo e o motorista
+function completarPeloPar(){
+  var el=ge("nos-par"); if(!el) return;
+  var pl=String(el.value||"").toUpperCase().replace(/[\s\-\.]/g,"");
+  el.value=pl;
+  if(!pl) return;
+  var conj=frotaPorPlaca(pl); if(!conj) return;
+  var ehCarreta=(window._nosVeic==="car");
+  var principal=ge("nos-placa");
+  var outra = ehCarreta ? conj.carreta : conj.cavalo;
+  if(principal && !String(principal.value||"").trim() && outra){
+    principal.value=outra;
+    validarPlacaNOS();
+    return;
+  }
+  var mot=ge("nos-motorista");
+  if(mot && !String(mot.value||"").trim() && conj.motorista) mot.value=conj.motorista;
+}
+function frotaPorPlaca(placa){
+  var k=mkPlacaKey(placa);
+  if(!k) return null;
+  for(var i=0;i<(frota||[]).length;i++){
+    var f=frota[i]; if(!f) continue;
+    if(mkPlacaKey(f.cavalo)===k) return {cavalo:f.cavalo||"", carreta:f.carreta||"", motorista:f.motorista||"", achouPor:"cav"};
+  }
+  for(var j=0;j<(frota||[]).length;j++){
+    var g=frota[j]; if(!g) continue;
+    if(g.carreta && mkPlacaKey(g.carreta)===k) return {cavalo:g.cavalo||"", carreta:g.carreta||"", motorista:g.motorista||"", achouPor:"car"};
+  }
+  return null;
+}
+// Ultimo motorista visto para a placa, caso ela nao esteja na lista de caminhoes
+function ultimoMotoristaPlaca(placa){
+  var k=mkPlacaKey(placa);
+  if(!k) return "";
+  var achou="";
+  (osData||[]).forEach(function(o){
+    if(!o || o.deleted || !o.mot) return;
+    if(mkPlacaKey(o.pl)===k || mkPlacaKey(o.plCav)===k || mkPlacaKey(o.plCar)===k) achou=o.mot;
+  });
+  if(achou) return achou;
+  (manutKanban||[]).forEach(function(m){
+    if(!m || m.deleted || !m.motorista) return;
+    if(mkPlacaKey(m.cavalo)===k || mkPlacaKey(m.carreta)===k) achou=m.motorista;
+  });
+  return achou;
+}
 function nosTipoVeic(v){
   window._nosVeic = (v==="car") ? "car" : "cav";
   var tc=ge("nos-tab-cav"), tr=ge("nos-tab-car");
@@ -6294,7 +6527,10 @@ function nosTipoVeic(v){
   var lb=ge("nos-par-lb");
   if(lb) lb.textContent=(window._nosVeic==="car")?"Cavalo acoplado (so referencia)":"Carreta acoplada (so referencia)";
   var inp=ge("nos-placa");
-  if(inp) inp.placeholder=(window._nosVeic==="car")?"Ex: SWG-7I69":"Ex: GDQ-7466";
+  if(inp){
+    inp.placeholder=(window._nosVeic==="car")?"Ex: SWG-7I69":"Ex: GDQ-7466";
+    if(String(inp.value||"").trim()) validarPlacaNOS();
+  }
 }
 function osTipoVeic(o){ return (o && o.veic==="car") ? "car" : "cav"; }
 function osSeloVeic(o){
@@ -6352,12 +6588,15 @@ function abrirNovaOS() {
     +'<button type="button" id="nos-tab-car" onclick="nosTipoVeic(\'car\')">&#128667; Carreta</button></div>'
     +'<input id="nos-placa" class="form-input" placeholder="Ex: GDQ-7466" style="font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-size:15px" oninput="this.value=this.value.toUpperCase()" onblur="validarPlacaNOS()"><div id="nos-placa-info" style="font-size:11px;margin-top:4px"></div>'
     +'<div style="margin-top:9px"><label class="form-label" id="nos-par-lb">Carreta acoplada (so referencia)</label>'
-    +'<input id="nos-par" class="form-input" placeholder="Ex: SWG-7I69" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()"></div></div>'
+    +'<input id="nos-par" class="form-input" placeholder="Ex: SWG-7I69" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()" onblur="completarPeloPar()"></div></div>'
     +'<div class="form-group"><label class="form-label">KM do Veiculo *</label>'
     +'<input id="nos-km" type="number" class="form-input" placeholder="Ex: 450000" oninput="validarKM()"><div id="nos-km-warn" style="font-size:11px;color:var(--red);margin-top:4px;display:none"></div></div>'
     +'<div class="form-group"><label class="form-label">Data</label>'
     +'<input id="nos-data" type="date" class="form-input" value="'+hoje+'"></div>'
     +'</div>'
+    +'<div class="form-group"><label class="form-label">Motorista</label>'
+    +'<input id="nos-motorista" class="form-input" list="nos-mot-dl" placeholder="Preenche sozinho pela placa"></div>'
+    +'<datalist id="nos-mot-dl">'+((frota||[]).map(function(f){ return f&&f.motorista?('<option value="'+esc(f.motorista)+'">'):''; }).join(""))+'</datalist>'
     +'<div class="form-row">'
     +'<div class="form-group" style="flex:2"><label class="form-label">Mecanico / Responsavel *</label>'
     +'<input id="nos-mec" class="form-input" placeholder="Nome do mecanico"></div>'
@@ -6482,6 +6721,7 @@ function renderNOSPecas() {
 function confirmarNovaOS() {
   var placa   = (ge("nos-placa")   ? ge("nos-placa").value   : "").trim().toUpperCase();
   var veicTipo = window._nosVeic || "cav";
+  var motorista = (ge("nos-motorista") ? ge("nos-motorista").value : "").trim();
   var placaPar = (ge("nos-par") ? ge("nos-par").value : "").trim().toUpperCase().replace(/[\s\-\.]/g,"");
   var km      = parseInt(ge("nos-km")     ? ge("nos-km").value     : "0");
   var mec     = (ge("nos-mec")    ? ge("nos-mec").value    : "").trim();
@@ -6537,6 +6777,7 @@ function confirmarNovaOS() {
     col: "entrada",
     pl: placa,
     veic: veicTipo,
+    mot: motorista,
     plCav: (veicTipo==="car" ? placaPar : placa),
     plCar: (veicTipo==="car" ? placa : placaPar),
     fa: tipo===2 ? empresa : "TRANSCCEMA",
@@ -7083,24 +7324,54 @@ function sugerirPlacas(inputId) {
 }
 
 function validarPlacaNOS() {
-  var inp = document.getElementById('nos-placa');
-  var info = document.getElementById('nos-placa-info');
-  var kmEl = document.getElementById('nos-km');
+  var inp = ge('nos-placa');
+  var info = ge('nos-placa-info');
+  var kmEl = ge('nos-km');
   if (!inp) return;
-  var placa = inp.value.toUpperCase().replace(/[\s\-\.]/g,'');
+  var placa = String(inp.value||"").toUpperCase().replace(/[\s\-\.]/g,'');
   inp.value = placa;
-  if (!placa || !info) return;
+  if (!placa) return;
+
+  var ehCarreta = (window._nosVeic === "car");
   var dados = getInfoPlaca(placa);
-  if (!dados) {
-    info.style.color='var(--red)'; info.textContent='Placa nao encontrada na frota TRANSCCEMA!';
-  } else {
-    info.style.color='var(--grn)'; info.textContent='Frota TRANSCCEMA | '+dados.t;
-    var ult = getUltimoKMPlaca(placa);
-    if (ult>0 && kmEl && !kmEl.value) {
-      kmEl.value = ult;
-      var w = document.getElementById('nos-km-warn');
-      if (w) { w.style.display='block'; w.style.color='var(--m2)'; w.textContent='Ultimo KM: '+Number(ult).toLocaleString('pt-BR')+' km'; }
+  var conj  = frotaPorPlaca(placa);
+
+  // ---- carreta / cavalo do conjunto ----
+  var par = ge('nos-par');
+  if (par) {
+    var outra = conj ? (ehCarreta ? conj.cavalo : conj.carreta) : "";
+    if (outra && !String(par.value||"").trim()) par.value = outra;
+  }
+  // ---- motorista ----
+  var mot = ge('nos-motorista');
+  if (mot && !String(mot.value||"").trim()) {
+    var nome = (conj && conj.motorista) || ultimoMotoristaPlaca(placa) || "";
+    if (nome) mot.value = nome;
+  }
+  // ---- aviso da placa ----
+  if (info) {
+    if (!dados && !conj) {
+      info.style.color='var(--yel)';
+      info.textContent='Placa fora da lista de caminhoes - confira, mas da para seguir.';
+    } else {
+      info.style.color='var(--grn)';
+      var p=[];
+      p.push('Frota TRANSCCEMA');
+      if (dados && dados.t) p.push(dados.t);
+      if (conj) {
+        if (ehCarreta && conj.cavalo) p.push('cavalo '+conj.cavalo);
+        else if (!ehCarreta && conj.carreta) p.push('carreta '+conj.carreta);
+        if (conj.motorista) p.push(conj.motorista);
+      }
+      info.textContent = p.join(' | ');
     }
+  }
+  // ---- ultimo KM ----
+  var ult = getUltimoKMPlaca(placa);
+  if (ult>0 && kmEl && !kmEl.value) {
+    kmEl.value = ult;
+    var w = ge('nos-km-warn');
+    if (w) { w.style.display='block'; w.style.color='var(--m2)'; w.textContent='Ultimo KM: '+Number(ult).toLocaleString('pt-BR')+' km'; }
   }
 }
 
@@ -7134,7 +7405,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 80 - CAVALO E CARRETA SEPARADOS</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 83 - OS PUXA CARRETA E MOTORISTA</div>
   </div>
 </div>
 </body></html>
