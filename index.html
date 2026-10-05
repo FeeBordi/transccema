@@ -4955,8 +4955,8 @@ function openMKModal(id, alvoIni){
 
   openModal(m?("Editar — "+esc(m.cavalo)+(m.carreta?(" + "+esc(m.carreta)):"")):"Nova Manutencao",
     '<div class="form-row" style="margin-bottom:12px">'
-    +'<div class="form-group"><label class="form-label">Cavalo <span class="form-req">*</span></label><select id="mk-cavalo" class="form-select" onchange="mkPreenche()">'+opts+'</select></div>'
-    +'<div class="form-group"><label class="form-label">Carreta</label><input id="mk-carreta" class="form-input" value="'+esc(m?(m.carreta||""):"")+'" oninput="this.value=this.value.toUpperCase()"></div>'
+    +'<div class="form-group"><label class="form-label">Cavalo <span class="form-req">*</span></label><select id="mk-cavalo" class="form-select" onchange="mkPreenche(true)">'+opts+'</select></div>'
+    +'<div class="form-group"><label class="form-label">Carreta</label><input id="mk-carreta" class="form-input" value="'+esc(m?(m.carreta||""):"")+'" oninput="this.value=this.value.toUpperCase()" onblur="mkPreencheCarreta()"></div>'
     +'</div>'
     +'<div class="form-group" style="margin-bottom:14px"><label class="form-label">Motorista</label><input id="mk-motorista" class="form-input" value="'+esc(m?(m.motorista||""):"")+'"></div>'
     +'<datalist id="mk-mecs">'+dl+'</datalist>'
@@ -4983,11 +4983,41 @@ function mkTrocarAba(a){
   var av=ge("mk-aviso-car");
   if(av) av.style.display=(a==="car" && !String(gv("mk-carreta")||"").trim())?"":"none";
 }
-function mkPreenche(){
+// Se o Joao digitar a carreta em vez de escolher o cavalo, completa o resto
+function mkPreencheCarreta(){
+  var cr=ge("mk-carreta"); if(!cr) return;
+  var pl=String(cr.value||"").toUpperCase().replace(/[\s\-\.]/g,"");
+  cr.value=pl;
+  if(!pl) return;
+  var conj=null, k=mkPlacaKey(pl);
+  for(var i=0;i<(frota||[]).length;i++){
+    if(frota[i] && mkPlacaKey(frota[i].carreta)===k){ conj=frota[i]; break; }
+  }
+  if(!conj) return;
+  var cav=ge("mk-cavalo");
+  if(cav && conj.cavalo && cav.value!==conj.cavalo){
+    var achou=false;
+    for(var j=0;j<cav.options.length;j++){ if(cav.options[j].value===conj.cavalo){ cav.selectedIndex=j; achou=true; break; } }
+    if(achou) showToast("Carreta "+pl+" -> cavalo "+conj.cavalo);
+  }
+  var mo=ge("mk-motorista");
+  if(mo && !String(mo.value||"").trim() && conj.motorista) mo.value=conj.motorista;
+  mkPreenche(false);
+}
+function mkPreenche(trocouCavalo){
   var p=gv("mk-cavalo"); var f=mkVeic(p);
+  var cr=ge("mk-carreta"), mo=ge("mk-motorista");
   if(f){
-    if(ge("mk-carreta") && !String(ge("mk-carreta").value||"").trim()) ge("mk-carreta").value=f.carreta||"";
-    if(ge("mk-motorista") && !String(ge("mk-motorista").value||"").trim()) ge("mk-motorista").value=f.motorista||"";
+    // ao TROCAR o cavalo, carreta e motorista sao reescritos com os do novo conjunto.
+    // ao apenas abrir a tela, so preenche o que estiver em branco.
+    if(cr && (trocouCavalo || !String(cr.value||"").trim())) cr.value=f.carreta||"";
+    if(mo && (trocouCavalo || !String(mo.value||"").trim())) mo.value=f.motorista||"";
+    if(trocouCavalo) showToast(p+" -> carreta "+(f.carreta||"nenhuma")+(f.motorista?(" - "+f.motorista):""));
+  } else if(trocouCavalo && p){
+    // cavalo fora da lista de caminhoes: limpa para nao ficar com o conjunto errado
+    if(cr) cr.value="";
+    if(mo) mo.value="";
+    showToast(p+" nao esta na lista de caminhoes - preencha a carreta e o motorista na mao",true);
   }
   var kmC=mkUltimoKm(p), hC=ge("mk-km-hint-cav"), cC=ge("mk-km-cav");
   if(hC) hC.innerHTML = kmC ? ("ultimo registrado: "+Number(kmC).toLocaleString('pt-BR')+" km") : "";
@@ -7568,7 +7598,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 86 - SINCRONIZAR E BACKUP PARA TODOS</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 87 - TROCAR O CAVALO ATUALIZA O CONJUNTO</div>
   </div>
 </div>
 </body></html>
