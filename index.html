@@ -511,6 +511,7 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
     <div id="sec-mk" class="section">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px">
         <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input id="mk-f-placa" class="form-input" placeholder="&#128269; Placa (letras ou numeros)" autocomplete="off" style="width:200px;padding:8px 12px;font-size:12px;text-transform:uppercase" oninput="renderMK()">
           <select id="mk-f-mec" class="form-select" style="width:auto;padding:8px 12px;font-size:12px" onchange="renderMK()"></select>
           <select id="mk-f-tipo" class="form-select" style="width:auto;padding:8px 12px;font-size:12px" onchange="renderMK()"></select>
           <select id="mk-f-veic" class="form-select" style="width:auto;padding:8px 12px;font-size:12px" onchange="mkFiltrarVeic(this.value)">
@@ -5261,6 +5262,7 @@ function renderMK(){
   var host=ge("mk-board"); if(!host) return;
   try{ mkDedup(); }catch(e){}
   var fMec=gv("mk-f-mec")||"", fTipo=gv("mk-f-tipo")||"", fVei=window._mkFiltroVeic||"";
+  var fPlaca=mkPlacaKey(gv("mk-f-placa")||"");
   var mecs={};
   mkAtivos().forEach(function(m){
     mkAlvosAtivos(m).forEach(function(a){ var r=mkAlvo(m,a); if(r.mecanico) mecs[r.mecanico]=1; });
@@ -5274,6 +5276,7 @@ function renderMK(){
   function alvosVisiveis(m){
     return mkAlvosAtivos(m).filter(function(a){
       if(fVei && fVei!==a) return false;
+      if(fPlaca && !mkPlacaBate(mkPlacaAlvo(m,a), fPlaca)) return false;
       var r=mkAlvo(m,a);
       if(fMec && r.mecanico!==fMec) return false;
       if(fTipo && r.tipo!==fTipo) return false;
@@ -5344,6 +5347,17 @@ function renderMK(){
   });
   host.innerHTML=html;
   renderMKSide();
+}
+// Busca de placa: aceita a placa inteira, um pedaco, so as letras ou so os numeros.
+// Ex.: RTX4F21 aparece com "RTX", "421", "4F2" ou "RTX4F21".
+function mkPlacaBate(placa, q){
+  var k=mkPlacaKey(placa); q=mkPlacaKey(q);
+  if(!q) return true;
+  if(!k) return false;
+  if(k.indexOf(q)>=0) return true;
+  if(/^[0-9]+$/.test(q)) return k.replace(/[^0-9]/g,"").indexOf(q)>=0;
+  if(/^[A-Z]+$/.test(q)) return k.replace(/[^A-Z]/g,"").indexOf(q)>=0;
+  return false;
 }
 function mkFiltrarVeic(v){ window._mkFiltroVeic=v||""; renderMK(); }
 function renderMKSide(){
