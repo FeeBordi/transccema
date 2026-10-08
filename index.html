@@ -4284,6 +4284,11 @@ function salvarMK(){
 function mkGerarOS(id, a){
   var m=mkFind(id); if(!m){ showToast("Registro nao encontrado",true); return; }
   a=a||mkSelAlvo||"cav";
+  if(mkPrecisaNovoCiclo(m,a)){
+    showToast("Veiculo voltou da viagem - preencha a NOVA entrada (a anterior fica no historico)");
+    openMKModal(id, a);
+    return;
+  }
   var r=mkAlvo(m,a);
   var placa=mkPlacaAlvo(m,a);
   if(!placa){ showToast("Informe a placa da "+MK_ALVO_LB[a].toLowerCase(),true); return; }
@@ -4354,7 +4359,10 @@ function mkHistorico(placa){
     mkAlvosAtivos(m).forEach(function(a){
       if(mkPlacaKey(mkPlacaAlvo(m,a))!==k) return;
       var r=mkAlvo(m,a);
-      if(r.fim) h.push({tipo:r.tipo, inicio:r.inicio, fim:r.fim, mecanico:r.mecanico, placa:placa, alvo:a});
+      if(r.fim) h.push({tipo:r.tipo, inicio:r.inicio, fim:r.fim, mecanico:r.mecanico, os:r.os||"", placa:placa, alvo:a});
+      (r.hist||[]).forEach(function(x){
+        if(x && x.fim) h.push({tipo:x.tipo, inicio:x.inicio, fim:x.fim, mecanico:x.mecanico, os:x.os||"", placa:placa, alvo:a});
+      });
     });
   });
   h.sort(function(a,b){ return String(b.fim).localeCompare(String(a.fim)); });
@@ -4649,7 +4657,7 @@ function aplicarBaixasPendentes(){
       almoxMovs.unshift({id:uid(), updatedAt:Date.now(), local:"SP", tipo:"saida", itemId:r.itemId,
         produto:r.nome, unidade:r.unidade, qtd:real, placa:r.placa, responsavel:"Conferencia",
         descricao:"Baixa pela conferencia ("+r.tipo+(r.ref?(" "+r.ref):"")+")",
-        data:today(), pedido:(r.osNum||r.ref||""), mkId:(r.mkId?(r.alvo==="car"?(r.mkId+"|car"):r.mkId):"")});
+        data:today(), pedido:(r.osNum||r.ref||""), mkId:(r.mkId?(function(){ var _m=mkFind(r.mkId); return _m ? mkMovId(_m, r.alvo||"cav") : (r.alvo==="car"?(r.mkId+"|car"):r.mkId); })():"")});
       if(r.mkId) cartoes[r.mkId+"|"+(r.alvo||"cav")]=1;
       ok++;
     }catch(e){ erro.push(r.nome+": "+e); }
@@ -4794,8 +4802,60 @@ function mkColCartao(m){
 }
 // Identificador da movimentacao de estoque. O cavalo mantem o id antigo
 // para nao perder o vinculo das baixas que ja foram feitas.
-function mkMovId(m, a){ return a==="car" ? (m.id+"|car") : m.id; }
+function mkMovId(m, a){
+  var base = a==="car" ? (m.id+"|car") : m.id;
+  var c = (mkAlvo(m,a).ciclo|0);
+  return c ? (base+"#"+c) : base;
+}
 function mkAlvosAtivos(m){ return mkTemCarreta(m) ? ["cav","car"] : ["cav"]; }
+
+// ---- Nova entrada depois da viagem ----
+// Quando a placa volta da viagem, a manutencao anterior vai para o historico
+// e abre uma entrada NOVA (nova OS), em vez de editar a antiga.
+var MK_HIST_MAX = 15;
+function mkTemDados(r){
+  return !!(r && (r.os || r.inicio || r.tipo || r.desc || r.mecanico || (r.pecas && r.pecas.length)));
+}
+function mkPrecisaNovoCiclo(m, a){
+  if(!m) return false;
+  if(a==="car" && !mkTemCarreta(m)) return false;
+  return mkColAlvo(m,a)==="viagem" && mkTemDados(mkAlvo(m,a));
+}
+function mkNovoCiclo(m, a){
+  if(!m) return null;
+  var r = mkAlvo(m,a);
+  if(!mkTemDados(r)) return null;
+  if(!r.fim) r.fim = mkAgora();
+  try{ if(mkOSNums(r.os).length) mkConcluirOS(m.id, a); }catch(e){ console.warn("mkNovoCiclo/concluir OS:", e); }
+  var snap = {
+    tipo:r.tipo||"", mecanico:r.mecanico||"", km:r.km||0,
+    inicio:r.inicio||"", fim:r.fim||"", os:r.os||"", desc:r.desc||"",
+    pecas:(r.pecas||[]).slice(), movId:mkMovId(m,a), arquivadoEm:mkAgora()
+  };
+  if(!Array.isArray(r.hist)) r.hist = [];
+  r.hist.unshift(snap);
+  if(r.hist.length > MK_HIST_MAX) r.hist.length = MK_HIST_MAX;
+  r.ciclo = (r.ciclo|0) + 1;
+  r.tipo=""; r.mecanico=""; r.inicio=""; r.fim=""; r.os=""; r.desc="";
+  r.pecas=[]; r.baixaAplicada=[]; r.baixado=false;
+  m.updatedAt = bumpTs(m);
+  return snap;
+}
+function mkJuntaHist(dst, src){
+  if(!dst || !src) return;
+  if((src.ciclo|0) > (dst.ciclo|0)) dst.ciclo = src.ciclo|0;
+  if(!Array.isArray(src.hist) || !src.hist.length) return;
+  if(!Array.isArray(dst.hist)) dst.hist = [];
+  var tem = {};
+  dst.hist.forEach(function(h){ if(h) tem[(h.movId||"")+"|"+(h.inicio||"")+"|"+(h.os||"")]=1; });
+  src.hist.forEach(function(h){
+    if(!h) return;
+    var k=(h.movId||"")+"|"+(h.inicio||"")+"|"+(h.os||"");
+    if(!tem[k]){ dst.hist.push(h); tem[k]=1; }
+  });
+  dst.hist.sort(function(x,y){ return String(y.fim||y.inicio||"").localeCompare(String(x.fim||x.inicio||"")); });
+  if(dst.hist.length > MK_HIST_MAX) dst.hist.length = MK_HIST_MAX;
+}
 
 function mkPlacaKey(p){ return String(p||"").toUpperCase().replace(/[^A-Z0-9]/g,""); }
 function _idMK(placa){ return "mk_"+mkPlacaKey(placa); }
@@ -4845,6 +4905,7 @@ function mkDedup(){
     ["mecanico","desc","carreta","motorista","inicio","fim","tipo"].forEach(function(f){ if(!venc[f] && perd[f]) venc[f]=perd[f]; });
     if(!venc.km && perd.km) venc.km=perd.km;
     if(perd.baixado) venc.baixado=true;
+    try{ mkJuntaHist(venc, perd); if(venc.car && perd.car && venc.car!==perd.car) mkJuntaHist(venc.car, perd.car); }catch(e){ console.warn("mkDedup/hist:", e); }
     venc.updatedAt=Math.max(venc.updatedAt||0, perd.updatedAt||0)+1;
     tumbas.push({id:perd.id, cavalo:perd.cavalo, deleted:true, updatedAt:Date.now()});
     porPlaca[k]=venc;
@@ -4911,8 +4972,15 @@ function salvarFrota(){
 }
 
 // ---- Novo / editar cartao ----
-function openMKModal(id, alvoIni){
+function openMKModal(id, alvoIni, forcarEdicao){
   var m = id?mkFind(id):null;
+  if(id && !m){ showToast("Registro nao encontrado",true); return; }
+  var abaIni = (alvoIni==="car") ? "car" : "cav";
+  // placa em viagem com manutencao antiga -> formulario em branco (nova entrada / nova OS)
+  window._mkModo = {cav:"editar", car:"editar"};
+  if(m && !forcarEdicao){
+    MK_ALVOS.forEach(function(x){ if(mkPrecisaNovoCiclo(m,x)) window._mkModo[x]="novo"; });
+  }
   var placas = frota.map(function(f){ return f.cavalo; });
   if(m && placas.indexOf(m.cavalo)<0) placas.unshift(m.cavalo);
   var opts = placas.length
@@ -4920,13 +4988,27 @@ function openMKModal(id, alvoIni){
     : '<option value="">-- atualize a lista de caminhoes --</option>';
   var dl = mkMecanicos().map(function(x){ return '<option value="'+esc(x)+'">'; }).join("");
   var rc = m?mkAlvo(m,"cav"):{}, rr = m?mkAlvo(m,"car"):{};
+  var antCav = rc, antCar = rr;
+  if(window._mkModo.cav==="novo") rc = {km:antCav.km||0};
+  if(window._mkModo.car==="novo") rr = {km:antCar.km||0};
   window._mkPecasCav = m ? JSON.parse(JSON.stringify(rc.pecas||[])) : [];
   window._mkPecasCar = m ? JSON.parse(JSON.stringify(rr.pecas||[])) : [];
-  window._mkAba = (alvoIni==="car") ? "car" : "cav";
+  window._mkAba = abaIni;
+  var temNovo = (window._mkModo.cav==="novo" || window._mkModo.car==="novo");
 
   function bloco(a, r){
     var mostrar = (window._mkAba===a) ? "" : "display:none";
-    return '<div id="mk-bl-'+a+'" style="'+mostrar+'">'
+    var novo = (window._mkModo[a]==="novo");
+    var ant = (a==="car") ? antCar : antCav;
+    var aviso = novo
+      ? '<div style="background:rgba(59,130,246,.10);border:1px solid rgba(59,130,246,.35);border-radius:8px;padding:9px 11px;margin-bottom:12px;font-size:12px;color:var(--tx)">'
+        +'&#128666; Esta placa estava <b>EM VIAGEM</b>. Voce esta abrindo uma <b>NOVA entrada</b> na manutencao'
+        +(mkOSNums(ant.os).length?(' &mdash; a anterior ('+esc(ant.os)+')'):' &mdash; a anterior')
+        +' vai para o historico e nao sera alterada.'
+        +(a!==abaIni?'<br><span style="color:var(--m2)">Se nao mexer nesta aba, esta placa continua em viagem como esta.</span>':'')
+        +'</div>'
+      : '';
+    return '<div id="mk-bl-'+a+'" style="'+mostrar+'">'+aviso
       +'<div class="form-row" style="margin-bottom:12px">'
       +'<div class="form-group"><label class="form-label">Mecanico responsavel</label><input id="mk-mecanico-'+a+'" class="form-input" list="mk-mecs" value="'+esc(r.mecanico||"")+'"></div>'
       +'<div class="form-group"><label class="form-label">Tipo de manutencao</label><select id="mk-tipo-'+a+'" class="form-select">'
@@ -4938,6 +5020,7 @@ function openMKModal(id, alvoIni){
       +'<div class="form-group"><label class="form-label">Situacao</label><select id="mk-col-'+a+'" class="form-select">'
       +MK_COLS.map(function(c){
           var atual = m ? mkColAlvo(m,a) : (a==="car"?"viagem":"fila");
+          if(novo) atual = (a===abaIni) ? "manutencao" : "viagem";
           return '<option value="'+c.k+'"'+((atual===c.k)?" selected":"")+'>'+c.lb+'</option>';
         }).join("")+'</select></div></div>'
       +'<div class="form-row" style="margin-bottom:12px">'
@@ -4953,7 +5036,7 @@ function openMKModal(id, alvoIni){
       +'</div>';
   }
 
-  openModal(m?("Editar — "+esc(m.cavalo)+(m.carreta?(" + "+esc(m.carreta)):"")):"Nova Manutencao",
+  openModal(m?((temNovo?"Nova entrada — ":"Editar — ")+esc(m.cavalo)+(m.carreta?(" + "+esc(m.carreta)):"")):"Nova Manutencao",
     '<div class="form-row" style="margin-bottom:12px">'
     +'<div class="form-group"><label class="form-label">Cavalo <span class="form-req">*</span></label><select id="mk-cavalo" class="form-select" onchange="mkPreenche(true)">'+opts+'</select></div>'
     +'<div class="form-group"><label class="form-label">Carreta</label><input id="mk-carreta" class="form-input" value="'+esc(m?(m.carreta||""):"")+'" oninput="this.value=this.value.toUpperCase()" onblur="mkPreencheCarreta()"></div>'
@@ -5038,26 +5121,55 @@ function salvarMK2(id){
   if(!carr && pecasCar.length){
     showToast("Informe a placa da carreta ou tire as pecas dela",true); return;
   }
-  var m;
+  var m, modo = window._mkModo || {cav:"editar", car:"editar"};
+  var veioDoNovo = false;
   if(id){
-    m=mkFind(id); if(!m) return;
+    m=mkFind(id); if(!m){ showToast("Registro nao encontrado",true); return; }
     var outro=mkPorPlaca(cav);
     if(outro && outro.id!==id){ showToast(cav+" ja esta em outro cartao do quadro",true); return; }
   } else {
     var jaTem=mkPorPlaca(cav);
-    if(jaTem){
+    if(jaTem && mkColAlvo(jaTem,"cav")==="viagem"){
+      // cavalo voltou da viagem: usa o cartao dele, mas abre uma entrada NOVA
+      m=jaTem; mkSel=m.id; veioDoNovo=true;
+      modo={cav:"novo", car:(mkTemCarreta(jaTem) && mkColAlvo(jaTem,"car")!=="viagem") ? "pular" : "novo"};
+      if(!carr) carr = jaTem.carreta || "";
+    } else if(jaTem){
       closeModal();
       showToast(cav+" ja esta no quadro - abrindo o cartao existente",true);
       mkSel=jaTem.id; renderMK();
       setTimeout(function(){ openMKModal(jaTem.id); },260);
       return;
+    } else {
+      m={id:_idMK(cav), ordem:mkAtivos().length, updatedAt:Date.now()};
+      manutKanban.push(m); mkSel=m.id;
     }
-    m={id:_idMK(cav), ordem:mkAtivos().length, updatedAt:Date.now()};
-    manutKanban.push(m); mkSel=m.id;
   }
-  m.cavalo=cav; m.carreta=carr; m.motorista=(gv("mk-motorista")||"").trim();
+  // placa "nova entrada": se o Joao nao mexeu nela, fica como estava (em viagem)
+  function mexeu(a, pecas){
+    return (gv("mk-col-"+a)||"viagem")!=="viagem"
+      || !!(gv("mk-tipo-"+a)||"") || !!(gv("mk-desc-"+a)||"").trim()
+      || !!(gv("mk-os-"+a)||"").trim() || !!(gv("mk-mecanico-"+a)||"").trim()
+      || !!(gv("mk-ini-"+a)||"") || (pecas && pecas.length>0);
+  }
+  var aplicar = {cav:true, car:!!carr}, arquivou = [];
+  [["cav",pecasCav],["car",pecasCar]].forEach(function(par){
+    var a=par[0];
+    if(!aplicar[a]) return;
+    if(modo[a]==="pular"){ aplicar[a]=false; return; }
+    if(modo[a]==="novo"){
+      if(!mexeu(a, par[1])){ aplicar[a]=false; return; }
+      try{ var sn=mkNovoCiclo(m,a); if(sn) arquivou.push(mkPlacaAlvo(m,a)+(sn.os?(" ("+sn.os+")"):"")); }
+      catch(e){ console.error("salvarMK2/mkNovoCiclo:", e); showToast("Erro ao guardar a entrada anterior: "+e,true); aplicar[a]=false; }
+    }
+  });
+
+  m.cavalo=cav; m.carreta=carr || (veioDoNovo ? (m.carreta||"") : carr);
+  var _mot=(gv("mk-motorista")||"").trim();
+  m.motorista = _mot || (veioDoNovo ? (m.motorista||"") : _mot);
   // compatibilidade: o quadro antigo lia m.tipo e m.mecanico direto do cartao
   var rc=mkAlvo(m,"cav");
+  if(aplicar.cav){
   rc.mecanico=(gv("mk-mecanico-cav")||"").trim();
   rc.tipo=gv("mk-tipo-cav")||"";
   rc.km=parseInt(gv("mk-km-cav")||"0",10)||0;
@@ -5068,8 +5180,9 @@ function salvarMK2(id){
   rc.pecas=pecasCav;
   m.col=gv("mk-col-cav")||"fila";
   if(m.col==="manutencao" && !rc.inicio) rc.inicio=mkAgora();
+  }
 
-  if(carr){
+  if(carr && aplicar.car){
     var rr=mkAlvo(m,"car");
     rr.mecanico=(gv("mk-mecanico-car")||"").trim();
     rr.tipo=gv("mk-tipo-car")||"";
@@ -5085,14 +5198,16 @@ function salvarMK2(id){
   m.updatedAt=bumpTs(m);
 
   var r1={itens:0,baixou:0,devolveu:0,avisos:[]}, r2={itens:0,baixou:0,devolveu:0,avisos:[]};
-  try{ r1=mkAplicarBaixa(m,"cav",pecasCav); }catch(e){ r1.avisos=["erro no cavalo: "+e]; }
-  try{ r2=mkAplicarBaixa(m,"car", carr?pecasCar:[]); }catch(e){ r2.avisos=["erro na carreta: "+e]; }
+  // so mexe no estoque das placas que foram realmente salvas
+  if(aplicar.cav){ try{ r1=mkAplicarBaixa(m,"cav",pecasCav); }catch(e){ r1.avisos=["erro no cavalo: "+e]; } }
+  if(aplicar.car || (!carr && modo.car!=="pular" && modo.car!=="novo")){ try{ r2=mkAplicarBaixa(m,"car", carr?pecasCar:[]); }catch(e){ r2.avisos=["erro na carreta: "+e]; } }
+  window._mkModo = null;
 
   salvarMK(); closeModal(); renderMK();
   try{ if(typeof renderAlmox==="function") renderAlmox(); }catch(e){}
   var juntos={baixou:r1.baixou+r2.baixou, devolveu:r1.devolveu+r2.devolveu, itens:r1.itens+r2.itens};
   var msg=_msgBaixa(juntos);
-  showToast("Manutencao salva!"+(msg?(" "+msg+"."):""));
+  showToast((arquivou.length?("Nova entrada aberta! Anterior guardada no historico: "+arquivou.join(", ")+". "):"Manutencao salva!")+(msg?(" "+msg+"."):""));
   var av=(r1.avisos||[]).concat(r2.avisos||[]);
   if(av.length) setTimeout(function(){ alert("Atencao no almoxarifado:\n\n- "+av.join("\n- ")); },300);
 }
@@ -5120,8 +5235,12 @@ function mkDrop(evt,col){
   // arrastar o cartao move O CONJUNTO INTEIRO.
   // para mover so uma placa, use a situacao no painel da direita.
   var mexeu=[];
+  var novas=[];
   mkAlvosAtivos(m).forEach(function(a){
     if(mkColAlvo(m,a)===col) return;
+    if((col==="fila" || col==="manutencao") && mkPrecisaNovoCiclo(m,a)){
+      try{ if(mkNovoCiclo(m,a)) novas.push(mkPlacaAlvo(m,a)); }catch(e){ console.error("mkDrop/mkNovoCiclo:", e); }
+    }
     var r=mkAlvo(m,a);
     mkSetColAlvo(m,a,col);
     if(col==="manutencao" && !r.inicio) r.inicio=mkAgora();
@@ -5132,7 +5251,8 @@ function mkDrop(evt,col){
   if(!mexeu.length){ mkDragId=null; return; }
   m.updatedAt=bumpTs(m);
   mkDragId=null; salvarMK(); renderMK();
-  showToast(mexeu.join(" + ")+" -> "+({manutencao:"Em Manutencao",fila:"Fila",pronto:"Pronto",viagem:"Em Viagem"}[col]));
+  showToast(mexeu.join(" + ")+" -> "+({manutencao:"Em Manutencao",fila:"Fila",pronto:"Pronto",viagem:"Em Viagem"}[col])
+    +(novas.length?(" - nova entrada aberta (anterior no historico)"):""));
 }
 function mkSelecionar(id, a){ mkSel=id; if(a) mkSelAlvo=a; renderMK(); }
 
@@ -5249,7 +5369,7 @@ function renderMKSide(){
   var histHtml = hist.manut.length
     ? hist.manut.slice(0,4).map(function(x){
         var hh=mkHoras(x.inicio,x.fim);
-        return '<div class="mk-pline"><span>'+mkFmtDT(x.fim).slice(0,10)+' &middot; '+esc(x.tipo||"")+'</span><b>'+(hh!==null?hh.toFixed(1).replace(".",",")+"h":"--")+'</b></div>';
+        return '<div class="mk-pline"><span>'+mkFmtDT(x.fim).slice(0,10)+' &middot; '+esc(x.tipo||"")+(x.os?(' &middot; '+mkOSLinks(x.os)):'')+'</span><b>'+(hh!==null?hh.toFixed(1).replace(".",",")+"h":"--")+'</b></div>';
       }).join("")
     : '<div style="color:var(--mu);font-size:12px;padding:4px 0">Primeira manutencao desta placa</div>';
 
@@ -5262,6 +5382,7 @@ function renderMKSide(){
   }).join("");
 
   var opcoes=MK_COLS.map(function(c){ return '<option value="'+c.k+'"'+(c.k===col?" selected":"")+'>'+c.lb+'</option>'; }).join("");
+  var emViagemComDados = mkPrecisaNovoCiclo(m,a);
 
   box.innerHTML=
     '<div class="mk-abas">'+abas+'</div>'
@@ -5272,7 +5393,11 @@ function renderMKSide(){
     +'<div class="mk-fld"><div class="l">Situacao desta placa</div>'
     +'<select class="form-select" style="font-size:12.5px;padding:7px 9px" onchange="mkMudarCol(\''+m.id+'\',\''+a+'\',this.value)">'+opcoes+'</select></div>'
     +'<div class="mk-fld"><div class="l">Ordens de Servico'+(mkOSNums(r.os).length>1?(' ('+mkOSNums(r.os).length+')'):'')+'</div><div class="v">'+mkOSLinks(r.os)+'</div>'
-    +'<button class="btn btn-g" style="width:100%;justify-content:center;margin-top:7px;font-size:12px" onclick="mkGerarOS(\''+m.id+'\',\''+a+'\')">&#128220; '+(mkOSNums(r.os).length?"Gerar outra OS":"Gerar OS automatica")+'</button></div>'
+    +(emViagemComDados
+      ? '<button class="btn" style="width:100%;justify-content:center;margin-top:7px;font-size:12.5px;background:var(--blu);color:#fff;font-weight:700" onclick="openMKModal(\''+m.id+'\',\''+a+'\')">&#10133; Nova entrada / nova OS</button>'
+        +'<div style="font-size:10.5px;color:var(--mu);margin-top:4px;text-align:center">voltou da viagem: a OS acima fica no historico</div>'
+      : '<button class="btn btn-g" style="width:100%;justify-content:center;margin-top:7px;font-size:12px" onclick="mkGerarOS(\''+m.id+'\',\''+a+'\')">&#128220; '+(mkOSNums(r.os).length?"Gerar outra OS":"Gerar OS automatica")+'</button>')
+    +'</div>'
     +'<div class="mk-fld"><div class="l">Mecanico responsavel</div><div class="v">'+esc(r.mecanico||"--")+'</div></div>'
     +'<div class="mk-fld"><div class="l">'+(a==="car"?"KM rodado da carreta":"Hodometro")+'</div><div class="v">'+(r.km?Number(r.km).toLocaleString('pt-BR')+" km":"--")+'</div></div>'
     +'<div class="mk-fld"><div class="l">Entrada</div><div class="v">'+mkFmtDT(r.inicio)+'</div></div>'
@@ -5282,12 +5407,18 @@ function renderMKSide(){
     +'<div class="mk-fld"><div class="l">Pecas utilizadas</div>'+pec+'</div>'
     +'<div class="mk-fld"><div class="l">Historico desta placa ('+hist.manut.length+' manutencoes, '+hist.os.length+' OS)</div>'+histHtml+'</div>'
     +'<div style="display:flex;gap:8px;margin-top:14px">'
-    +'<button class="btn btn-p" style="flex:1;justify-content:center" onclick="openMKModal(\''+m.id+'\',\''+a+'\')">Editar</button>'
+    +(emViagemComDados
+      ? '<button class="btn btn-g" style="flex:1;justify-content:center" onclick="openMKModal(\''+m.id+'\',\''+a+'\',true)">Corrigir a ultima</button>'
+      : '<button class="btn btn-p" style="flex:1;justify-content:center" onclick="openMKModal(\''+m.id+'\',\''+a+'\')">Editar</button>')
     +(col!=="pronto"?'<button class="btn btn-ok" onclick="mkLiberar(\''+m.id+'\',\''+a+'\')">Liberar &#10003;</button>':'<button class="btn btn-g" onclick="mkViagem(\''+m.id+'\',\''+a+'\')">Em viagem &#128666;</button>')
     +'</div>';
 }
 function mkMudarCol(id, a, v){
   var m=mkFind(id); if(!m) return;
+  var novaEnt=false;
+  if((v==="fila" || v==="manutencao") && mkPrecisaNovoCiclo(m,a)){
+    try{ novaEnt=!!mkNovoCiclo(m,a); }catch(e){ console.error("mkMudarCol/mkNovoCiclo:", e); showToast("Erro ao guardar a entrada anterior: "+e,true); }
+  }
   var r=mkAlvo(m,a);
   mkSetColAlvo(m,a,v);
   if(v==="manutencao" && !r.inicio) r.inicio=mkAgora();
@@ -5295,7 +5426,7 @@ function mkMudarCol(id, a, v){
   if(v==="fila"){ r.fim=""; }
   m.updatedAt=bumpTs(m);
   salvarMK(); renderMK();
-  showToast(mkPlacaAlvo(m,a)+" -> "+(MK_COLS.filter(function(c){return c.k===v;})[0]||{}).lb);
+  showToast(mkPlacaAlvo(m,a)+" -> "+(MK_COLS.filter(function(c){return c.k===v;})[0]||{}).lb+(novaEnt?" - nova entrada aberta (anterior no historico)":""));
 }
 function mkLiberar(id, a){
   var m=mkFind(id); if(!m) return;
@@ -5328,6 +5459,11 @@ function printMKReport(){
   mkAtivos().forEach(function(m){
     mkAlvosAtivos(m).forEach(function(a){
       var r=mkAlvo(m,a);
+      (r.hist||[]).forEach(function(x){
+        if(x && x.fim) concl.push({cavalo:mkPlacaAlvo(m,a), veiculo:MK_ALVO_LB[a], carreta:(a==="cav"?(m.carreta||""):""),
+          motorista:m.motorista||"", mecanico:x.mecanico||"", tipo:x.tipo||"", km:x.km||0,
+          inicio:x.inicio, fim:x.fim, os:x.os||"", pecas:x.pecas||[]});
+      });
       if(r.fim) concl.push({cavalo:mkPlacaAlvo(m,a), veiculo:MK_ALVO_LB[a], carreta:(a==="cav"?(m.carreta||""):""),
         motorista:m.motorista||"", mecanico:r.mecanico||"", tipo:r.tipo||"", km:r.km||0,
         inicio:r.inicio, fim:r.fim, os:r.os||"", pecas:r.pecas||[]});
@@ -5928,6 +6064,7 @@ function aplicarDuplicadas(){
           ["pecas","baixaAplicada"].forEach(function(campo){
             (r[campo]||[]).forEach(function(p){ if(p && p.itemId===x.id) p.itemId=fica.id; });
           });
+          (r.hist||[]).forEach(function(hh){ ((hh&&hh.pecas)||[]).forEach(function(p){ if(p && p.itemId===x.id) p.itemId=fica.id; }); });
         });
         m.updatedAt=Date.now();
       });
