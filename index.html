@@ -5637,7 +5637,11 @@ function renderAlmox() {
     var pct    = item.maximo > 0 ? Math.min(100, Math.round((item.saldo/item.maximo)*100)) : 0;
     var col    = isZero ? "var(--mu)" : isLow ? "var(--red)" : "var(--grn)";
     return '<div class="'+cls+'">'
-      +'<div style="font-size:12px;font-weight:700;line-height:1.3;margin-bottom:6px;color:var(--tx)">'+esc(item.produto)+'</div>'
+      +'<div style="display:flex;gap:6px;align-items:flex-start;margin-bottom:6px">'
+      +'<div style="flex:1;font-size:12px;font-weight:700;line-height:1.3;color:var(--tx)">'+esc(item.produto)+'</div>'
+      +(ehSoLeitura()?'':'<button title="Editar nome" style="background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);color:var(--blu);border-radius:5px;padding:2px 6px;cursor:pointer;font-size:11px;line-height:1.2" data-ed="'+item.id+'">&#9998;</button>'
+        +'<button title="Apagar peca" style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:var(--red);border-radius:5px;padding:2px 6px;cursor:pointer;font-size:11px;line-height:1.2" data-del="'+item.id+'">&#128465;</button>')
+      +'</div>'
       +'<div style="display:flex;justify-content:space-between;align-items:baseline">'
       +'<span style="font-size:24px;font-weight:800;color:'+col+'">'+item.saldo+'</span>'
       +'<span style="font-size:11px;color:var(--m2)">'+esc(item.unidade)+'</span></div>'
@@ -5654,6 +5658,8 @@ function renderAlmox() {
   // Attach click handlers via delegation
   ge("alm-grid").querySelectorAll("[data-qe]").forEach(function(b){b.onclick=function(){quickEntry(this.getAttribute("data-qe"));};});
   ge("alm-grid").querySelectorAll("[data-qx]").forEach(function(b){b.onclick=function(){quickExit(this.getAttribute("data-qx"));};});
+  ge("alm-grid").querySelectorAll("[data-ed]").forEach(function(b){b.onclick=function(){editarNomePeca(this.getAttribute("data-ed"));};});
+  ge("alm-grid").querySelectorAll("[data-del]").forEach(function(b){b.onclick=function(){apagarPeca(this.getAttribute("data-del"));};});
   ge("alm-pages").innerHTML = fil.length > ALM_PG
     ? '<button class="btn btn-g btn-sm" onclick="almoxPage--;renderAlmox()" '+(almoxPage===0?"disabled":"")+'>Anterior</button>'
       +'<span>Pagina '+(almoxPage+1)+' / '+pages+' ('+fil.length+' itens)</span>'
@@ -5665,8 +5671,67 @@ function renderAlmox() {
 
 function updateBadgesAlmox() {
   var b = ge("balm"); if (!b) return;
-  var n = almoxItems.filter(function(i){return i.saldo<i.minimo&&i.minimo>0;}).length;
+  var n = almoxItems.filter(function(i){return !i.deleted && i.saldo<i.minimo&&i.minimo>0;}).length;
   b.textContent = n; b.style.display = n ? "" : "none";
+}
+
+// -- EDITAR NOME / APAGAR PECA --
+function _achaPecaPorId(id){
+  for (var i=0;i<almoxItems.length;i++){ if (almoxItems[i] && almoxItems[i].id===id) return almoxItems[i]; }
+  return null;
+}
+function editarNomePeca(id) {
+  try {
+    if (ehSoLeitura()) { showToast("Seu usuario e somente leitura.", true); return; }
+    var item = _achaPecaPorId(id);
+    if (!item || item.deleted) { showToast("Peca nao encontrada.", true); return; }
+    window._edPecaId = id;
+    openModal("Editar Nome da Peca",
+      '<div class="form-group" style="margin-bottom:14px">'
+        +'<label class="form-label">Nome da peca <span style="color:var(--acc)">*</span></label>'
+        +'<input id="ed-peca-nome" class="form-input" maxlength="200" value="'+esc(item.produto)+'"></div>'
+      +'<div style="color:var(--m2);font-size:11px;margin-bottom:14px">Saldo, custo e historico de movimentacoes continuam os mesmos.</div>'
+      +'<div style="display:flex;gap:8px;justify-content:flex-end">'
+        +'<button class="btn btn-g" onclick="closeModal()">Cancelar</button>'
+        +'<button class="btn btn-p" onclick="salvarNomePeca()">Salvar</button></div>');
+    setTimeout(function(){ var el=ge("ed-peca-nome"); if(el){ el.focus(); el.select();
+      el.onkeydown=function(e){ if(e.key==="Enter") salvarNomePeca(); }; } }, 50);
+  } catch(e) { console.error(e); showToast("Erro ao abrir edicao: "+e.message, true); }
+}
+function salvarNomePeca() {
+  try {
+    var item = _achaPecaPorId(window._edPecaId);
+    if (!item || item.deleted) { showToast("Peca nao encontrada.", true); closeModal(); return; }
+    var el = ge("ed-peca-nome");
+    var nome = el ? el.value.replace(/\s+/g," ").trim() : "";
+    if (!nome) { showToast("Informe o nome da peca.", true); if(el) el.focus(); return; }
+    if (nome === item.produto) { closeModal(); return; }
+    var dup = _achaPecaPorNome(nome, item.local||"SP");
+    if (dup && dup.id !== item.id) {
+      if (!confirm('Ja existe uma peca com esse nome neste almoxarifado:\n\n"'+dup.produto+'" (saldo '+dup.saldo+')\n\nSalvar mesmo assim?')) return;
+    }
+    item.produto = nome;
+    item.updatedAt = bumpTs(item);
+    saveAll(); closeModal(); renderAlmox();
+    showToast("Nome da peca atualizado.");
+  } catch(e) { console.error(e); showToast("Erro ao salvar nome: "+e.message, true); }
+}
+function apagarPeca(id) {
+  try {
+    if (ehSoLeitura()) { showToast("Seu usuario e somente leitura.", true); return; }
+    var item = _achaPecaPorId(id);
+    if (!item || item.deleted) { showToast("Peca nao encontrada.", true); return; }
+    var msg = 'Apagar a peca "'+item.produto+'" do almoxarifado?';
+    if ((Number(item.saldo)||0) > 0) msg += '\n\nATENCAO: ela ainda tem '+item.saldo+' '+(item.unidade||"Un")+' em estoque ('+R(item.valorEstoque||0)+').';
+    msg += '\n\nO historico de entradas e saidas sera mantido.';
+    if (!confirm(msg)) return;
+    item.deleted = true;
+    item.deletedAt = Date.now();
+    item.deletedBy = (currentUser && currentUser.name) || "";
+    item.updatedAt = bumpTs(item);
+    saveAll(); renderAlmox();
+    showToast("Peca apagada.");
+  } catch(e) { console.error(e); showToast("Erro ao apagar peca: "+e.message, true); }
 }
 
 // -- MOVIMENTACOES --
