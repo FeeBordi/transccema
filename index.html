@@ -1195,6 +1195,228 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
 
 <div id="toast-msg"></div>
 <script>
+// ===== ARMAZENAMENTO GRANDE NO NAVEGADOR (IndexedDB) - versao 88 =====
+// O localStorage do Chrome so guarda ~5 MB por endereco e ja estava cheio.
+// Os dados grandes deste sistema (OS, almoxarifado, despesas, pedidos, manutencao
+// e backups locais) passam a ficar no IndexedDB, que aceita centenas de MB.
+// A planilha do Google continua sendo a copia principal - nada muda na sincronizacao.
+// Se o IndexedDB nao estiver disponivel, o sistema funciona como antes (localStorage).
+(function(){
+  var DB_NOME = "transccema_dados", LOJA = "kv", VERSAO_DB = 1;
+  var CHAVES_GRANDES = {
+    tc_os_data:1, tc_alm_movs:1, tc_alm_items:1, tc_final_adm:1, tc_final_ord:1,
+    tc_final_man:1, tc_final_sup:1, tc_final_qts:1, tc_manut_kb:1, tc_ord_mortos:1
+  };
+  function ehGrande(k){
+    k = String(k);
+    return CHAVES_GRANDES.hasOwnProperty(k) || k.indexOf("tc_snap_") === 0;
+  }
+
+  var mem = {};          // copia em memoria (leitura instantanea)
+  var db = null;
+  var ativo = false;     // true = chaves grandes vivem no IndexedDB
+  var pendentes = {};    // gravacoes aguardando ir para o IndexedDB (null = apagar)
+  var temPendente = false;
+  var timer = null;
+  var avisouErro = false;
+  var appIniciado = false;
+
+  function avisarErroGravacao(e){
+    try{ console.error("[TRANSCCEMA] Falha ao gravar no IndexedDB:", e); }catch(_){}
+    if(avisouErro) return; avisouErro = true;
+    setTimeout(function(){
+      try{ showToast("Nao consegui salvar no navegador. Os dados seguem indo para a planilha - clique em Sincronizar.", true); }catch(_){}
+    }, 300);
+  }
+
+  function gravarPendentes(){
+    timer = null;
+    if(!db || !temPendente) return;
+    var lote = pendentes; pendentes = {}; temPendente = false;
+    var tx;
+    try{
+      tx = db.transaction(LOJA, "readwrite");
+      var st = tx.objectStore(LOJA);
+      Object.keys(lote).forEach(function(k){
+        if(lote[k] === null) st.delete(k); else st.put(lote[k], k);
+      });
+    }catch(e){
+      devolver(lote); avisarErroGravacao(e); return;
+    }
+    tx.onerror = function(ev){ try{ ev.preventDefault(); }catch(_){} };
+    tx.onabort = function(){ devolver(lote); avisarErroGravacao(tx.error); };
+  }
+  // Se a gravacao falhou, recoloca na fila o que nao foi sobrescrito depois
+  function devolver(lote){
+    Object.keys(lote).forEach(function(k){
+      if(!pendentes.hasOwnProperty(k)){ pendentes[k] = lote[k]; temPendente = true; }
+    });
+    if(!timer) timer = setTimeout(gravarPendentes, 3000);
+  }
+  function agendar(){
+    temPendente = true;
+    if(!timer) timer = setTimeout(gravarPendentes, 60);
+  }
+  // Ao fechar/minimizar a aba, grava na hora o que estiver pendente
+  function gravarJa(){ if(timer){ clearTimeout(timer); timer = null; } gravarPendentes(); }
+  window.addEventListener("pagehide", gravarJa);
+  document.addEventListener("visibilitychange", function(){ if(document.visibilityState === "hidden") gravarJa(); });
+
+  function listaChaves(){
+    var L = [], vistos = {};
+    if(ativo){
+      Object.keys(mem).forEach(function(k){ L.push(k); vistos[k] = 1; });
+    }
+    try{
+      for(var i = 0; i < localStorage.length; i++){
+        var k = localStorage.key(i);
+        if(k !== null && !vistos[k] && !(ativo && ehGrande(k))){ L.push(k); vistos[k] = 1; }
+      }
+    }catch(e){}
+    return L;
+  }
+
+  var TCStore = {
+    getItem: function(k){
+      k = String(k);
+      if(ativo && ehGrande(k)) return mem.hasOwnProperty(k) ? mem[k] : null;
+      return localStorage.getItem(k);
+    },
+    setItem: function(k, v){
+      k = String(k); v = String(v);
+      if(ativo && ehGrande(k)){
+        mem[k] = v; pendentes[k] = v; agendar();
+        return;
+      }
+      localStorage.setItem(k, v);
+    },
+    removeItem: function(k){
+      k = String(k);
+      if(ativo && ehGrande(k)){
+        delete mem[k]; pendentes[k] = null; agendar();
+      }
+      try{ localStorage.removeItem(k); }catch(e){}
+    },
+    key: function(i){ var L = listaChaves(); return (i >= 0 && i < L.length) ? L[i] : null; },
+    clear: function(){ throw new Error("TCStore.clear desativado por seguranca"); },
+    usandoIndexedDB: function(){ return ativo; },
+    gravarAgora: gravarJa
+  };
+  Object.defineProperty(TCStore, "length", { get: function(){ return listaChaves().length; } });
+  window.TCStore = TCStore;
+
+  // Roda o codigo principal do sistema (guardado no <script type="text/tc-app">)
+  function iniciarApp(){
+    if(appIniciado) return; appIniciado = true;
+    var el = document.getElementById("tcAppScript");
+    if(!el && document.readyState === "loading"){
+      // a pagina ainda nao terminou de ler o script principal: espera
+      appIniciado = false;
+      document.addEventListener("DOMContentLoaded", iniciarApp);
+      return;
+    }
+    if(!el){ try{ console.error("[TRANSCCEMA] Script principal nao encontrado"); }catch(_){} return; }
+    // Eventos de carregamento registrados depois que a pagina ja carregou rodam na hora
+    var origWin = window.addEventListener, origDoc = document.addEventListener;
+    function embrulhar(orig, alvo){
+      return function(tipo, fn, op){
+        var jaPassou = (tipo === "DOMContentLoaded" && document.readyState !== "loading") ||
+                       (tipo === "load" && alvo === window && document.readyState === "complete");
+        if(jaPassou && typeof fn === "function"){
+          setTimeout(function(){
+            try{ fn.call(alvo, { type: tipo, target: document }); }
+            catch(e){ try{ console.error("[TRANSCCEMA] Erro no evento "+tipo+":", e); }catch(_){} }
+          }, 0);
+          return;
+        }
+        return orig.call(this, tipo, fn, op);
+      };
+    }
+    window.addEventListener = embrulhar(origWin, window);
+    document.addEventListener = embrulhar(origDoc, document);
+    try{
+      var s = document.createElement("script");
+      s.text = el.textContent;
+      el.parentNode.insertBefore(s, el.nextSibling);
+    }finally{
+      window.addEventListener = origWin;
+      document.addEventListener = origDoc;
+    }
+  }
+
+  function modoAntigo(motivo){
+    ativo = false;
+    try{ console.warn("[TRANSCCEMA] Usando localStorage (IndexedDB indisponivel):", motivo); }catch(_){}
+    iniciarApp();
+  }
+
+  // Seguranca: se o IndexedDB travar, abre o sistema do jeito antigo
+  var limite = setTimeout(function(){ if(!appIniciado){ db = null; modoAntigo("tempo esgotado"); } }, 5000);
+
+  try{
+    if(!window.indexedDB){ clearTimeout(limite); modoAntigo("sem suporte"); return; }
+    var req = indexedDB.open(DB_NOME, VERSAO_DB);
+    req.onupgradeneeded = function(){
+      var d = req.result;
+      if(!d.objectStoreNames.contains(LOJA)) d.createObjectStore(LOJA);
+    };
+    req.onblocked = function(){ try{ console.warn("[TRANSCCEMA] IndexedDB bloqueado por outra aba"); }catch(_){} };
+    req.onerror = function(){ clearTimeout(limite); if(!appIniciado) modoAntigo(req.error); };
+    req.onsuccess = function(){
+      if(appIniciado){ try{ req.result.close(); }catch(_){} return; } // ja abriu no modo antigo
+      var d = req.result;
+      d.onversionchange = function(){ try{ d.close(); }catch(_){} };
+      // 1) Le tudo que ja esta no IndexedDB
+      var lidos = {};
+      var tx1;
+      try{ tx1 = d.transaction(LOJA, "readonly"); }
+      catch(e){ clearTimeout(limite); modoAntigo(e); return; }
+      var cur = tx1.objectStore(LOJA).openCursor();
+      cur.onsuccess = function(){
+        var c = cur.result;
+        if(c){ lidos[String(c.key)] = c.value; c.continue(); }
+      };
+      tx1.onabort = tx1.onerror = function(){ if(!appIniciado){ clearTimeout(limite); modoAntigo(tx1.error); } };
+      tx1.oncomplete = function(){
+        if(appIniciado) return;
+        // 2) Migra o que ainda esta no localStorage (se existir la, e o mais recente)
+        var migrar = {}, temMigrar = false;
+        try{
+          for(var i = 0; i < localStorage.length; i++){
+            var k = localStorage.key(i);
+            if(k !== null && ehGrande(k)){ migrar[k] = localStorage.getItem(k); temMigrar = true; }
+          }
+        }catch(e){}
+        function pronto(){
+          clearTimeout(limite);
+          if(appIniciado) return;
+          mem = lidos; db = d; ativo = true;
+          try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist(); }catch(_){}
+          iniciarApp();
+        }
+        if(!temMigrar){ pronto(); return; }
+        var tx2;
+        try{
+          tx2 = d.transaction(LOJA, "readwrite");
+          var st = tx2.objectStore(LOJA);
+          Object.keys(migrar).forEach(function(k){ if(migrar[k] !== null) st.put(migrar[k], k); });
+        }catch(e){ clearTimeout(limite); modoAntigo(e); return; }
+        tx2.onabort = function(){ if(!appIniciado){ clearTimeout(limite); modoAntigo(tx2.error); } };
+        tx2.oncomplete = function(){
+          // So apaga do localStorage depois de confirmado no IndexedDB
+          Object.keys(migrar).forEach(function(k){
+            if(migrar[k] !== null) lidos[k] = migrar[k];
+            try{ localStorage.removeItem(k); }catch(_){}
+          });
+          try{ console.log("[TRANSCCEMA] Migrado para IndexedDB:", Object.keys(migrar).join(", ")); }catch(_){}
+          pronto();
+        };
+      };
+    };
+  }catch(e){ clearTimeout(limite); modoAntigo(e); }
+})();
+</script>
+<script type="text/tc-app" id="tcAppScript">
 // ===== Protecao da memoria do navegador (localStorage) =====
 // Os sistemas do mesmo endereco (feebordi.github.io) dividem 5 MB. Quando enche,
 // as gravacoes falhavam em silencio. Agora: libera caches descartaveis, tenta de novo
@@ -1251,7 +1473,7 @@ function _lsAvisarCheio(){
   }catch(e){}
 })();
 function lsSet(k, v){
-  try{ localStorage.setItem(k, v); return true; }catch(e){ return false; }
+  try{ TCStore.setItem(k, v); return true; }catch(e){ return false; }
 }
 
 
@@ -1397,7 +1619,7 @@ var DEFAULT_ADM = [
 // ============================================================
 function tryLoad(keys) {
   for (var i = 0; i < keys.length; i++) {
-    try { var v = localStorage.getItem(keys[i]); if (v) return JSON.parse(v); } catch(e) {}
+    try { var v = TCStore.getItem(keys[i]); if (v) return JSON.parse(v); } catch(e) {}
   }
   return null;
 }
@@ -1410,7 +1632,7 @@ function loadData(keys, def) {
 var suppliers = loadData(["tc_final_sup","v4_sups","tc3_sup","tc2_sup","tc_sup"], DEFAULT_SUPPLIERS);
 var orders    = loadData(["tc_final_ord","v4_ord","tc3_ord","tc2_ord","tc_ord"],  DEFAULT_ORDERS);
 // Corrige pedidos antigos sem carimbo de hora: da um updatedAt pra eles poderem sincronizar
-(function(){ var mudou=false; (orders||[]).forEach(function(o){ if(o && o.updatedAt==null){ o.updatedAt = Date.now(); mudou=true; } }); if(mudou){ try{ localStorage.setItem("tc_final_ord", JSON.stringify(orders)); }catch(e){} } })();
+(function(){ var mudou=false; (orders||[]).forEach(function(o){ if(o && o.updatedAt==null){ o.updatedAt = Date.now(); mudou=true; } }); if(mudou){ try{ TCStore.setItem("tc_final_ord", JSON.stringify(orders)); }catch(e){} } })();
 var manut     = loadData(["tc_final_man","v4_man","tc3_man","tc2_man","tc_man"],  DEFAULT_MANUT);
 var adminExp  = loadData(["tc_final_adm","v4_adm","tc3_adm","tc2_adm","tc_adm"], DEFAULT_ADM);
 var quotes    = tryLoad(["tc_final_qts","v4_qts","tc3_qts","tc2_qts","tc_qts"]) || [];
@@ -1423,10 +1645,10 @@ var frota = [];
 // Lista de caminhoes editada aqui e ainda nao confirmada pelo servidor:
 // enquanto estiver pendente, a lista local vence a do servidor.
 var frotaPendente = false;
-try{ frotaPendente = localStorage.getItem("tc_frota_pend")==="1"; }catch(e){ frotaPendente=false; }
+try{ frotaPendente = TCStore.getItem("tc_frota_pend")==="1"; }catch(e){ frotaPendente=false; }
 function marcarFrotaPendente(v){
   frotaPendente = !!v;
-  try{ if(v) localStorage.setItem("tc_frota_pend","1"); else localStorage.removeItem("tc_frota_pend"); }catch(e){}
+  try{ if(v) TCStore.setItem("tc_frota_pend","1"); else TCStore.removeItem("tc_frota_pend"); }catch(e){}
 }
 function aplicarFrotaRemota(lista){
   if(frotaPendente) return false;
@@ -1434,14 +1656,14 @@ function aplicarFrotaRemota(lista){
   return false;
 }
 (function(){
-  var st=[]; try{ st=JSON.parse(localStorage.getItem("tc_frota")||"[]"); }catch(e){ st=[]; }
-  var ver=""; try{ ver=localStorage.getItem("tc_frota_ver")||""; }catch(e){}
+  var st=[]; try{ st=JSON.parse(TCStore.getItem("tc_frota")||"[]"); }catch(e){ st=[]; }
+  var ver=""; try{ ver=TCStore.getItem("tc_frota_ver")||""; }catch(e){}
   if(ver!==FROTA_VER || !st.length){
     frota=JSON.parse(JSON.stringify(DEFAULT_FROTA));
-    try{ localStorage.setItem("tc_frota", JSON.stringify(frota)); localStorage.setItem("tc_frota_ver", FROTA_VER); }catch(e){}
+    try{ TCStore.setItem("tc_frota", JSON.stringify(frota)); TCStore.setItem("tc_frota_ver", FROTA_VER); }catch(e){}
   } else { frota=st; }
 })();
-var manutKanban = []; try { manutKanban = JSON.parse(localStorage.getItem("tc_manut_kb")||"[]"); } catch(e){ manutKanban=[]; }
+var manutKanban = []; try { manutKanban = JSON.parse(TCStore.getItem("tc_manut_kb")||"[]"); } catch(e){ manutKanban=[]; }
 var mkSel = null, mkDragId = null;
 var MK_COLS = [
   {k:"manutencao", lb:"EM MANUTENCAO", curto:"oficina", ic:"&#128295;", c:"#f87171", bg:"rgba(239,68,68,.10)", br:"rgba(239,68,68,.34)"},
@@ -1809,7 +2031,7 @@ function closeSeqModal() { ge("seq-modal").style.display = "none"; }
 // ============================================================
 var FUEL_URL = "https://script.google.com/macros/s/AKfycbxoDflpnOSSSYfj0eksC6Ruw0fhyImr3KOs_1QPdRrjDRzGFrXTVqw_5ocMWE2UwnV1nQ/exec";
 var fuelByMonth = {}, fuelTotal = 0, _fuelFetching = false;
-try { var _fc = localStorage.getItem("tc_fuel_cache"); if(_fc){ var _o=JSON.parse(_fc); fuelByMonth=_o.byMonth||{}; fuelTotal=_o.total||0; } } catch(e){}
+try { var _fc = TCStore.getItem("tc_fuel_cache"); if(_fc){ var _o=JSON.parse(_fc); fuelByMonth=_o.byMonth||{}; fuelTotal=_o.total||0; } } catch(e){}
 function carregarCombustivel(){
   if(_fuelFetching) return; _fuelFetching = true;
   fetch(FUEL_URL+"?json=1", {redirect:"follow"})
@@ -1825,7 +2047,7 @@ function carregarCombustivel(){
         var nome=MONTHS[mi]; bm[nome]=(bm[nome]||0)+v; tot+=v;
       });
       fuelByMonth=bm; fuelTotal=tot; _fuelFetching=false;
-      try { localStorage.setItem("tc_fuel_cache", JSON.stringify({byMonth:bm,total:tot,at:Date.now()})); } catch(e){}
+      try { TCStore.setItem("tc_fuel_cache", JSON.stringify({byMonth:bm,total:tot,at:Date.now()})); } catch(e){}
       if(currentSection==="dashboard") renderDashboard();
     })
     .catch(function(){ _fuelFetching=false; });
@@ -2264,13 +2486,13 @@ function saveNewOrder() {
 // ============================================================
 var ORD_MORTOS = {};
 try {
-  (JSON.parse(localStorage.getItem("tc_ord_mortos")||"[]")||[]).forEach(function(x){
+  (JSON.parse(TCStore.getItem("tc_ord_mortos")||"[]")||[]).forEach(function(x){
     if(x && x.id) ORD_MORTOS[x.id]=x;
   });
 } catch(e){ ORD_MORTOS={}; }
 function _listaMortos(){ return Object.keys(ORD_MORTOS).map(function(k){ return ORD_MORTOS[k]; }); }
 function salvarMortos(){
-  try{ localStorage.setItem("tc_ord_mortos", JSON.stringify(_listaMortos())); }catch(e){}
+  try{ TCStore.setItem("tc_ord_mortos", JSON.stringify(_listaMortos())); }catch(e){}
 }
 function marcarMortoOrd(o){
   if(!o || !o.id) return;
@@ -2862,7 +3084,7 @@ function seedHomologacao(){
       if(!f || f.deleted) return;
       if(!f.homolog){ f.homolog=_homologAuto(f.id); f.updatedAt=Date.now(); n++; }
     });
-    if(n){ try{ localStorage.setItem("tc_homolog_ver","1"); }catch(e){} saveAll(); }
+    if(n){ try{ TCStore.setItem("tc_homolog_ver","1"); }catch(e){} saveAll(); }
   }catch(e){}
   return n;
 }
@@ -3027,7 +3249,7 @@ function printCartaoCNPJ(){
 }
 
 function renderSuppliers() {
-  try{ if(localStorage.getItem("tc_homolog_ver")!=="1") seedHomologacao(); }catch(e){ }
+  try{ if(TCStore.getItem("tc_homolog_ver")!=="1") seedHomologacao(); }catch(e){ }
   var q = (gv("supplier-search")||"").toLowerCase();
   var filtered = suppliers.filter(function(s){
     return !s.deleted && (!q || (s.name||"").toLowerCase().indexOf(q)>=0 || (s.category||"").toLowerCase().indexOf(q)>=0
@@ -3138,7 +3360,7 @@ function deleteOS(id) {
   osData = osData.map(function(o){
     return String(o.i)===String(id) ? Object.assign({},o,{deleted:true,updatedAt:bumpTs(o)}) : o;
   });
-  try { localStorage.setItem("tc_os_data", JSON.stringify(osData)); } catch(e){}
+  try { TCStore.setItem("tc_os_data", JSON.stringify(osData)); } catch(e){}
   saveAll();
   renderOSView();
   showToast("OS excluida.");
@@ -3564,8 +3786,8 @@ var SYNC_KEY    = "tc_sync_url";
 var SYNC_TS_KEY = "tc_last_pull_ts";
 var SYNC_URL_PADRAO = "https://script.google.com/macros/s/AKfycbze7xJZT0mkqACD8b6EjWykmEdB40YaGj1BhBHyAZkW9H6COOzTWpikYtCPtMaZhkQV-g/exec";
 var syncUrl     = SYNC_URL_PADRAO; // FORCA a URL padrao em todos, ignora URL antiga salva no navegador
-try { localStorage.setItem(SYNC_KEY, SYNC_URL_PADRAO); } catch(e){}
-var lastPullTs  = parseFloat(localStorage.getItem(SYNC_TS_KEY) || "0");
+try { TCStore.setItem(SYNC_KEY, SYNC_URL_PADRAO); } catch(e){}
+var lastPullTs  = parseFloat(TCStore.getItem(SYNC_TS_KEY) || "0");
 var syncTimer   = null;
 
 function setSyncStatus(color, text) {
@@ -3621,7 +3843,7 @@ function saveSyncUrl() {
   if (!url) { showSyncResult("Cole a URL do Apps Script acima", false); return; }
   if (url.indexOf("script.google.com") < 0) { showSyncResult("URL invalida.", false); return; }
   syncUrl = url;
-  localStorage.setItem(SYNC_KEY, url);
+  TCStore.setItem(SYNC_KEY, url);
   showSyncResult("Conectando...", null);
   setSyncStatus("var(--yel)", "Conectando...");
   pushToServer(function(ok, msg) {
@@ -3630,7 +3852,7 @@ function saveSyncUrl() {
   });
 }
 function clearSyncUrl() {
-  syncUrl = ""; localStorage.removeItem(SYNC_KEY); localStorage.removeItem(SYNC_TS_KEY); lastPullTs = 0;
+  syncUrl = ""; TCStore.removeItem(SYNC_KEY); TCStore.removeItem(SYNC_TS_KEY); lastPullTs = 0;
   if (syncTimer) { clearInterval(syncTimer); syncTimer = null; }
   setSyncStatus("var(--mu)", "Sem sync"); showSyncResult("Desconectado.", null);
   if (ge("sync-url-input")) ge("sync-url-input").value = "";
@@ -3800,8 +4022,8 @@ function pushToServer(callback) {
     _frotaEnviadaPush = frota;
     mkExtrairCarona(merged.quotes); mkLimparCarona();
     try { mkDedup(); merged.manutKanban = manutKanban; } catch(e){}
-    try { localStorage.setItem("tc_manut_kb", JSON.stringify(manutKanban)); } catch(e){}
-    try { localStorage.setItem("tc_frota", JSON.stringify(frota)); } catch(e){}
+    try { TCStore.setItem("tc_manut_kb", JSON.stringify(manutKanban)); } catch(e){}
+    try { TCStore.setItem("tc_frota", JSON.stringify(frota)); } catch(e){}
     // Reconstroi almoxarifado local: padrao + alteracoes + pecas novas
     almoxItems = deepCopy(DEFAULT_ALMOX);
     if (merged.almoxDelta) Object.keys(merged.almoxDelta).forEach(function(id){
@@ -3824,7 +4046,7 @@ function pushToServer(callback) {
       // servidor confirmou: a lista de caminhoes enviada passa a ser a oficial
       if (frotaPendente && frota === _frotaEnviadaPush) marcarFrotaPendente(false);
       lastPullTs = Date.now();
-      try { localStorage.setItem("tc_last_pull_ts", String(lastPullTs)); } catch(e){}
+      try { TCStore.setItem("tc_last_pull_ts", String(lastPullTs)); } catch(e){}
       finish(true, "OK");
     } else {
       finish(false, (res && res.error) || "Resposta invalida do servidor");
@@ -3878,18 +4100,18 @@ function pullFromServer(callback) {
       if (_temNovos) rd.almoxNovos.forEach(function(it){ if(it && it.id!=null) _novosMap[it.id]=it; });
       Object.keys(_novosMap).forEach(function(id){ almoxItems.push(_novosMap[id]); });
     }
-    // Salva osData no localStorage apos merge
-    try { localStorage.setItem("tc_os_data", JSON.stringify(osData)); } catch(e){}
+    // Salva osData no TCStore apos merge
+    try { TCStore.setItem("tc_os_data", JSON.stringify(osData)); } catch(e){}
     if (rd.manutKanban) manutKanban = mergeById(manutKanban, rd.manutKanban);
     aplicarFrotaRemota(rd.frota);
     mkExtrairCarona(rd.quotes); mkLimparCarona();
     try { mkDedup(); } catch(e){}
-    try { localStorage.setItem("tc_manut_kb", JSON.stringify(manutKanban)); } catch(e){}
-    try { localStorage.setItem("tc_frota", JSON.stringify(frota)); } catch(e){}
+    try { TCStore.setItem("tc_manut_kb", JSON.stringify(manutKanban)); } catch(e){}
+    try { TCStore.setItem("tc_frota", JSON.stringify(frota)); } catch(e){}
     saveLocalOnly();
     if (currentSection==="mk" && typeof renderMK==="function") renderMK();
     lastPullTs = rd.savedAt;
-    localStorage.setItem("tc_last_pull_ts", String(lastPullTs));
+    TCStore.setItem("tc_last_pull_ts", String(lastPullTs));
     // Re-renderiza a tela para mostrar dados novos imediatamente
     refreshCurrentSection();
     if (currentSection === "os" && typeof renderOSView === "function") renderOSView();
@@ -3975,10 +4197,10 @@ function _snapHoje(){
 function listarSnapshots(){
   var L=[];
   try{
-    for(var i=0;i<localStorage.length;i++){
-      var k=localStorage.key(i);
+    for(var i=0;i<TCStore.length;i++){
+      var k=TCStore.key(i);
       if(k && k.indexOf(SNAP_PREFIXO)===0){
-        var txt=localStorage.getItem(k)||"";
+        var txt=TCStore.getItem(k)||"";
         L.push({chave:k, dia:k.slice(SNAP_PREFIXO.length), bytes:txt.length});
       }
     }
@@ -3990,13 +4212,13 @@ function _podarSnapshots(){
   var L=listarSnapshots();
   while(L.length>SNAP_MAX){
     var velho=L.pop();
-    try{ localStorage.removeItem(velho.chave); }catch(e){}
+    try{ TCStore.removeItem(velho.chave); }catch(e){}
   }
 }
 function criarSnapshot(forcado){
   var chave=SNAP_PREFIXO+_snapHoje();
   try{
-    if(!forcado && localStorage.getItem(chave)) return false;   // o de hoje ja existe
+    if(!forcado && TCStore.getItem(chave)) return false;   // o de hoje ja existe
     var d=packData();
     d.manutKanban=manutKanban||[];
     d.frota=frota||[];
@@ -4004,12 +4226,12 @@ function criarSnapshot(forcado){
     d.criadoEm=Date.now();
     var txt=JSON.stringify(d);
     try{
-      localStorage.setItem(chave, txt);
+      TCStore.setItem(chave, txt);
     }catch(e1){
       // sem espaco: joga fora o mais antigo e tenta de novo uma vez
       var L=listarSnapshots();
-      if(L.length){ try{ localStorage.removeItem(L[L.length-1].chave); }catch(e2){} }
-      try{ localStorage.setItem(chave, txt); }catch(e3){ return false; }
+      if(L.length){ try{ TCStore.removeItem(L[L.length-1].chave); }catch(e2){} }
+      try{ TCStore.setItem(chave, txt); }catch(e3){ return false; }
     }
     _podarSnapshots();
     return true;
@@ -4030,7 +4252,7 @@ function abrirBackupsLocais(){
   var L=listarSnapshots();
   var linhas=L.map(function(x){
     var d={};
-    try{ d=JSON.parse(localStorage.getItem(x.chave)||"{}"); }catch(e){}
+    try{ d=JSON.parse(TCStore.getItem(x.chave)||"{}"); }catch(e){}
     var p=x.dia.split("-");
     return '<tr>'
       +'<td style="padding:8px 10px;border-top:1px solid var(--b1);font-weight:700">'+p[2]+'/'+p[1]+'/'+p[0]+'</td>'
@@ -4058,7 +4280,7 @@ function abrirBackupsLocais(){
 }
 function baixarSnapshot(chave){
   try{
-    var txt=localStorage.getItem(chave)||"";
+    var txt=TCStore.getItem(chave)||"";
     if(!txt){ showToast("Backup vazio",true); return; }
     var blob=new Blob([txt],{type:"application/json"});
     var url=URL.createObjectURL(blob);
@@ -4071,7 +4293,7 @@ function baixarSnapshot(chave){
 }
 function restaurarSnapshot(chave){
   var d=null;
-  try{ d=JSON.parse(localStorage.getItem(chave)||"null"); }catch(e){}
+  try{ d=JSON.parse(TCStore.getItem(chave)||"null"); }catch(e){}
   if(!d){ showToast("Backup ilegivel",true); return; }
   if(!confirm("Restaurar os dados do dia "+chave.slice(SNAP_PREFIXO.length)+"?\n\n"
     +"O que estiver nesta maquina e trocado pelo backup.\n"
@@ -4097,9 +4319,9 @@ function restaurarSnapshot(chave){
         d.almoxNovos.forEach(function(it){ if(it&&it.id!=null&&!ex[it.id]) almoxItems.push(it); });
       }
     }
-    try{ localStorage.setItem("tc_os_data", JSON.stringify(osData)); }catch(e){}
-    try{ localStorage.setItem("tc_manut_kb", JSON.stringify(manutKanban)); }catch(e){}
-    try{ localStorage.setItem("tc_frota", JSON.stringify(frota)); }catch(e){}
+    try{ TCStore.setItem("tc_os_data", JSON.stringify(osData)); }catch(e){}
+    try{ TCStore.setItem("tc_manut_kb", JSON.stringify(manutKanban)); }catch(e){}
+    try{ TCStore.setItem("tc_frota", JSON.stringify(frota)); }catch(e){}
     saveAll(); closeModal(); refreshCurrentSection();
     alert("Dados restaurados nesta maquina.\n\nConfira na tela. Se estiver certo, clique em Sincronizar para subir para as outras maquinas.");
   }catch(e){ alert("Nao consegui restaurar:\n"+e); }
@@ -4229,8 +4451,8 @@ var _sl2 = saveLocalOnly;
 saveLocalOnly = function() {
   _sl2();
   try {
-    localStorage.setItem("tc_alm_items", JSON.stringify(almoxItems));
-    localStorage.setItem("tc_alm_movs",  JSON.stringify(almoxMovs));
+    TCStore.setItem("tc_alm_items", JSON.stringify(almoxItems));
+    TCStore.setItem("tc_alm_movs",  JSON.stringify(almoxMovs));
   } catch(e) {}
 };
 // Extend packData / unpackData
@@ -4355,8 +4577,8 @@ function consolidarDuplicatas(){ return 0; }
 // ===================== MANUTENCAO — KANBAN =====================
 function salvarMK(){
   try{ mkDedup(); }catch(e){}
-  try{ localStorage.setItem("tc_manut_kb", JSON.stringify(manutKanban)); }catch(e){}
-  try{ localStorage.setItem("tc_frota", JSON.stringify(frota)); }catch(e){}
+  try{ TCStore.setItem("tc_manut_kb", JSON.stringify(manutKanban)); }catch(e){}
+  try{ TCStore.setItem("tc_frota", JSON.stringify(frota)); }catch(e){}
   saveAll();
 }
 function mkGerarOS(id, a){
@@ -4388,7 +4610,7 @@ function mkGerarOS(id, a){
     pecas: pecasOS, fonte: "manutencao", updatedAt: Date.now()
   };
   osData.unshift(novaOS);
-  try { localStorage.setItem("tc_os_data", JSON.stringify(osData)); } catch(e){}
+  try { TCStore.setItem("tc_os_data", JSON.stringify(osData)); } catch(e){}
   var _oss = mkOSNums(r.os); if(_oss.indexOf(num)<0) _oss.push(num);
   r.os = _oss.join(", "); m.updatedAt = bumpTs(m);
   var _rg = mkAplicarBaixa(m, a, r.pecas);
@@ -4414,7 +4636,7 @@ function mkConcluirOS(id, a){
     }
   });
   if(n){
-    try { localStorage.setItem("tc_os_data", JSON.stringify(osData)); } catch(e){}
+    try { TCStore.setItem("tc_os_data", JSON.stringify(osData)); } catch(e){}
     if(typeof renderOSView==="function") renderOSView();
   }
   return n>0;
@@ -4450,7 +4672,7 @@ function mkHistorico(placa){
 }
 function mkMecanicos(){
   var lista=[];
-  try{ (JSON.parse(localStorage.getItem("tc_users")||"[]")||[]).forEach(function(u){ if(u&&u.name&&u.active!==false) lista.push(u.name); }); }catch(e){}
+  try{ (JSON.parse(TCStore.getItem("tc_users")||"[]")||[]).forEach(function(u){ if(u&&u.name&&u.active!==false) lista.push(u.name); }); }catch(e){}
   mkAtivos().forEach(function(m){
     mkAlvosAtivos(m).forEach(function(a){
       var r=mkAlvo(m,a);
@@ -5045,7 +5267,7 @@ function salvarFrota(){
   if(!nova.length){ showToast("Nenhuma linha valida",true); return; }
   frota=nova;
   marcarFrotaPendente(true);
-  try{ localStorage.setItem("tc_frota_ver", FROTA_VER); }catch(e){}
+  try{ TCStore.setItem("tc_frota_ver", FROTA_VER); }catch(e){}
   salvarMK(); closeModal(); renderMK();
   showToast(frota.length+" conjunto(s) na frota"+(erros?" ("+erros+" linha(s) ignorada(s))":"")+"!");
 }
@@ -6236,7 +6458,7 @@ function aplicarDuplicadas(){
     fica.valorEstoque=Math.round(a.q*(fica.custoMedio||0)*100)/100;
     stamp(fica); feitos++;
   });
-  try{ localStorage.setItem("tc_os_data", JSON.stringify(osData)); }catch(e){}
+  try{ TCStore.setItem("tc_os_data", JSON.stringify(osData)); }catch(e){}
   try{ salvarMK(); }catch(e){}
   saveAll(); closeModal(); renderAlmox();
   if(typeof updateBadgesAlmox==="function") updateBadgesAlmox();
@@ -6432,7 +6654,7 @@ var osPlacaFiltro = null;
 // Mergeia as 117 OS novas (14/05-02/06) no osData ja existente (3528 + locais)
 (function() {
   var RKEY = 'tc_os_gestran_v3';
-  if (localStorage.getItem(RKEY)) return;
+  if (TCStore.getItem(RKEY)) return;
   var OS_NOVAS = [{"i":"xl4064","n":"4064","st":"Em Aberto","col":"entrada","pl":"EWF0H96","fa":"Mercedes-Benz","mo":"Axor 2041","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-06-02","df":"2026-06-02","sv":[["NIVEL DE OLEO DO MOTOR","Substituir","","Preventiva",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4063","n":"4063","st":"Aprovadas","col":"realizado","pl":"ECV3I01","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"FRANCISCO CESARIO NETO","ho":0,"pr":1,"ti":1,"de":"2026-06-01","df":"2026-06-01","sv":[["INJE\u00c7\u00c3O E DIAGNOSTICO","Revisar","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4062","n":"4062","st":"Aprovadas","col":"realizado","pl":"FZP9H85","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"William Vidal Vieira","ho":0,"pr":1,"ti":1,"de":"2026-06-01","df":"2026-06-01","sv":[["ILUMINA\u00c7\u00c3O DO CAVALO","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4061","n":"4061","st":"Aprovadas","col":"realizado","pl":"UDI0J52","fa":"Scania","mo":"R450","ca":"Cavalo Mec\u00e2nico Simples","so":"Silverio Edwin Neil Sacho","ho":0,"pr":1,"ti":1,"de":"2026-06-01","df":"2026-06-01","sv":[["FILTRO DE OLEO DO MOTOR","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4060","n":"4060","st":"Aprovadas","col":"realizado","pl":"TJB5B40","fa":"Mercedes-Benz","mo":"Actros","ca":"Cavalo Mec\u00e2nico Simples","so":"William Vidal Vieira","ho":0,"pr":1,"ti":1,"de":"2026-06-01","df":"2026-06-01","sv":[["OLEO DO MOTOR","Completar","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4059","n":"4059","st":"Aprovadas","col":"realizado","pl":"FRZ5E63","fa":"Facchini","mo":"Ba\u00fa","ca":"Semi Reboque 3 Eixos Vanderleia","so":"Arnaldo Cesar de Morais","ho":0,"pr":1,"ti":1,"de":"2026-05-28","df":"2026-05-28","sv":[["SISTEMA PNEUMATICO ","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4058","n":"4058","st":"Aprovadas","col":"realizado","pl":"DIS4I51","fa":"Facchini","mo":"Ba\u00fa","ca":"Semi Reboque 3 Eixos Vanderleia","so":"Arnaldo Cesar de Morais","ho":0,"pr":1,"ti":1,"de":"2026-05-28","df":"2026-05-28","sv":[["SISTEMA PNEUMATICO ","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4057","n":"4057","st":"Aprovadas","col":"realizado","pl":"FQM3077","fa":"Facchini","mo":"Ba\u00fa","ca":"Semi Reboque 3 Eixos","so":"Arnaldo Cesar de Morais","ho":0,"pr":1,"ti":1,"de":"2026-05-27","df":"2026-05-27","sv":[["ESTRUTURA EXTERNA DA CARRETA","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4054","n":"4054","st":"Aprovadas","col":"realizado","pl":"DNK2424","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-06-01","df":"2026-06-01","sv":[["FILTROS DIESEL","Substituir","","Preventiva",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4053","n":"4053","st":"Aprovadas","col":"realizado","pl":"CGS6D85","fa":"Mercedes-Benz","mo":"Axor 2041","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-06-01","df":"2026-06-01","sv":[["ILUMINA\u00c7\u00c3O DO CAVALO","Testar","","Preventiva",1],["INTERCLIMA ; AR CONDICIONADO","Testar","","Preventiva",1],["PNEUS","Revisar","","Preventiva",1],["SISTEMA DE ILUMINA\u00c7\u00c3O E SINALIZA\u00c7\u00c3O","Verificar","","Preventiva",1],["FERRAMENTA OBRIGATORIA","Verificar","","Preventiva",1],["BUZINA","Testar","","Preventiva",1],["LIMPADOR DO PARABRISA","Verificar","","Preventiva",1],["CARRETA","Verificar","","Preventiva",1],["CINTO DE SEGURAN\u00c7A","Verificar","","Preventiva",1],["FREIOS","Verificar","","Preventiva",1],["TANQUE DE COMBUSTIVEL","Verificar","","Preventiva",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4052","n":"4052","st":"Aprovadas","col":"realizado","pl":"EVU2D08","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-05-31","df":"2026-05-31","sv":[["PNEUS","Revisar","","Preventiva",1],["SISTEMA DE ILUMINA\u00c7\u00c3O E SINALIZA\u00c7\u00c3O","Verificar","","Preventiva",1],["FREIOS","Verificar","","Preventiva",1],["TANQUE DE COMBUSTIVEL","Verificar","","Preventiva",1],["INTERCLIMA ; AR CONDICIONADO","Testar","","Preventiva",1],["BUZINA","Testar","","Preventiva",1],["LIMPADOR DO PARABRISA","Verificar","","Preventiva",1],["ILUMINA\u00c7\u00c3O DO CAVALO","Testar","","Preventiva",1],["CARRETA","Verificar","","Preventiva",1],["CINTO DE SEGURAN\u00c7A","Verificar","","Preventiva",1],["FERRAMENTA OBRIGATORIA","Verificar","","Preventiva",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4051","n":"4051","st":"Aprovadas","col":"realizado","pl":"BZG8698","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"FRANCISCO CESARIO NETO","ho":0,"pr":1,"ti":1,"de":"2026-05-25","df":"2026-05-25","sv":[["ILUMINA\u00c7\u00c3O DO CAVALO","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4050","n":"4050","st":"Aprovadas","col":"realizado","pl":"BUP5B75","fa":"Facchini","mo":"Ba\u00fa","ca":"Semi Reboque 3 Eixos","so":"FRANCISCO CESARIO NETO","ho":0,"pr":1,"ti":1,"de":"2026-05-25","df":"2026-05-25","sv":[["SISTEMA DE ILUMINA\u00c7\u00c3O E SINALIZA\u00c7\u00c3O","Revisar","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4049","n":"4049","st":"Aprovadas","col":"realizado","pl":"GJQ2G96","fa":"Mercedes-Benz","mo":"Axor 2041","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-05-30","df":"2026-05-30","sv":[["CARRETA","Verificar","","Preventiva",1],["FREIOS","Verificar","","Preventiva",1],["SISTEMA DE ILUMINA\u00c7\u00c3O E SINALIZA\u00c7\u00c3O","Verificar","","Preventiva",1],["PNEUS","Revisar","","Preventiva",1],["INTERCLIMA ; AR CONDICIONADO","Testar","","Preventiva",1],["LIMPADOR DO PARABRISA","Verificar","","Preventiva",1],["BUZINA","Testar","","Preventiva",1],["FERRAMENTA OBRIGATORIA","Verificar","","Preventiva",1],["TANQUE DE COMBUSTIVEL","Verificar","","Preventiva",1],["CINTO DE SEGURAN\u00c7A","Verificar","","Preventiva",1],["ILUMINA\u00c7\u00c3O DO CAVALO","Testar","","Preventiva",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4048","n":"4048","st":"Aprovadas","col":"realizado","pl":"FOO4B98","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-05-30","df":"2026-05-30","sv":[["FILTRO DE OLEO DO MOTOR","Substituir","","Preventiva",1],["FILTRO DE AR DO MOTOR","Substituir","","Preventiva",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4047","n":"4047","st":"Aprovadas","col":"realizado","pl":"GDQ7466","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"FRANCISCO CESARIO NETO","ho":0,"pr":1,"ti":1,"de":"2026-05-21","df":"2026-05-21","sv":[["INJE\u00c7\u00c3O E DIAGNOSTICO","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4046","n":"4046","st":"Aprovadas","col":"realizado","pl":"FJB5F85","fa":"Facchini","mo":"Ba\u00fa","ca":"Semi Reboque 3 Eixos Vanderleia","so":"FRANCISCO CESARIO NETO","ho":0,"pr":1,"ti":1,"de":"2026-05-19","df":"2026-05-19","sv":[["SISTEMA DE ILUMINA\u00c7\u00c3O E SINALIZA\u00c7\u00c3O","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4045","n":"4045","st":"Aprovadas","col":"realizado","pl":"FPU0F53","fa":"Mercedes-Benz","mo":"Axor 2041","ca":"Cavalo Mec\u00e2nico Simples","so":"FRANCISCO CESARIO NETO","ho":0,"pr":1,"ti":1,"de":"2026-05-19","df":"2026-05-19","sv":[["INJE\u00c7\u00c3O E DIAGNOSTICO","Revisar","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4044","n":"4044","st":"Aprovadas","col":"realizado","pl":"GAT9905","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"Silverio Edwin Neil Sacho","ho":0,"pr":1,"ti":1,"de":"2026-05-29","df":"2026-05-29","sv":[["FILTROS","Substituir","","Corretiva N\u00e3o Programada",1],["ILUMINA\u00c7\u00c3O DO CAVALO","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4043","n":"4043","st":"Aprovadas","col":"realizado","pl":"EQA1699","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"William Vidal Vieira","ho":0,"pr":1,"ti":1,"de":"2026-05-29","df":"2026-05-29","sv":[["SISTEMA DE ARREFECIMENTO E REFREGERA\u00c7\u00c3O DO MOTOR","Substituir","","Corretiva N\u00e3o Programada",1],["MOTOR","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4042","n":"4042","st":"Aprovadas","col":"realizado","pl":"TMA1B99","fa":"Mercedes-Benz","mo":"Actros","ca":"Cavalo Mec\u00e2nico Simples","so":"Silverio Edwin Neil Sacho","ho":0,"pr":1,"ti":1,"de":"2026-05-29","df":"2026-05-29","sv":[["SISTEMA DE CARGA E PARTIDA","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4041","n":"4041","st":"Aprovadas","col":"realizado","pl":"GBO2D62","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"Jord\u00e3o cavalcante  barbosa","ho":0,"pr":1,"ti":1,"de":"2026-05-29","df":"2026-05-29","sv":[["ITENS EXTERNOS DA CABINE","Substituir","","Corretiva N\u00e3o Programada",1],["ILUMINA\u00c7\u00c3O DO CAVALO","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4040","n":"4040","st":"Aprovadas","col":"realizado","pl":"UDR9J75","fa":"Scania","mo":"R450","ca":"Cavalo Mec\u00e2nico Simples","so":"Silverio Edwin Neil Sacho","ho":0,"pr":1,"ti":1,"de":"2026-05-29","df":"2026-05-29","sv":[["SISTEMA DE ILUMINA\u00c7\u00c3O E SINALIZA\u00c7\u00c3O","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4039","n":"4039","st":"Aprovadas","col":"realizado","pl":"BZR3H35","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-05-29","df":"2026-05-29","sv":[["NIVEL DE OLEO DO MOTOR","Substituir","","Preventiva",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4038","n":"4038","st":"Aprovadas","col":"realizado","pl":"SVU5F70","fa":"Mercedes-Benz","mo":"Actros","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-05-29","df":"2026-05-29","sv":[["BUZINA","Testar","","Preventiva",1],["PNEUS","Revisar","","Preventiva",1],["ILUMINA\u00c7\u00c3O DO CAVALO","Testar","","Preventiva",1],["FREIOS","Verificar","","Preventiva",1],["LIMPADOR DO PARABRISA","Verificar","","Preventiva",1],["INTERCLIMA ; AR CONDICIONADO","Testar","","Preventiva",1],["SISTEMA DE ILUMINA\u00c7\u00c3O E SINALIZA\u00c7\u00c3O","Verificar","","Preventiva",1],["CINTO DE SEGURAN\u00c7A","Verificar","","Preventiva",1],["CARRETA","Verificar","","Preventiva",1],["FERRAMENTA OBRIGATORIA","Verificar","","Preventiva",1],["TANQUE DE COMBUSTIVEL","Verificar","","Preventiva",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4037","n":"4037","st":"Aprovadas","col":"realizado","pl":"FFJ9F47","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"William Vidal Vieira","ho":0,"pr":1,"ti":1,"de":"2026-05-28","df":"2026-05-28","sv":[["ILUMINA\u00c7\u00c3O DO CAVALO","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4036","n":"4036","st":"Aprovadas","col":"realizado","pl":"DNK2424","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"William Vidal Vieira","ho":0,"pr":1,"ti":1,"de":"2026-05-28","df":"2026-05-28","sv":[["SISTEMA PNEUMATICO ","Substituir","","Corretiva N\u00e3o Programada",1],["ILUMINA\u00c7\u00c3O DO CAVALO","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4035","n":"4035","st":"Aprovadas","col":"realizado","pl":"ECV3I01","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"Jord\u00e3o cavalcante  barbosa","ho":0,"pr":1,"ti":1,"de":"2026-05-30","df":"2026-05-30","sv":[["FILTROS","Substituir","","Corretiva N\u00e3o Programada",1],["OLEO DO MOTOR","Substituir","","Corretiva N\u00e3o Programada",1],["ITENS EXTERNOS DA CABINE","Substituir","","Corretiva N\u00e3o Programada",1],["SISTEMA PNEUMATICO ","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4034","n":"4034","st":"Aprovadas","col":"realizado","pl":"CGS6D85","fa":"Mercedes-Benz","mo":"Axor 2041","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-05-28","df":"2026-05-28","sv":[["KIT DE CORREIA","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4033","n":"4033","st":"Aprovadas","col":"realizado","pl":"GHR2I92","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-05-28","df":"2026-05-28","sv":[["SISTEMA DE ARREFECIMENTO E REFREGERA\u00c7\u00c3O DO MOTOR","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4032","n":"4032","st":"Aprovadas","col":"realizado","pl":"ELE7344","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"William Vidal Vieira","ho":0,"pr":1,"ti":1,"de":"2026-05-27","df":"2026-05-27","sv":[["FILTROS","Substituir","","Corretiva N\u00e3o Programada",1],["OLEO DO MOTOR","Substituir","","Corretiva N\u00e3o Programada",1],["SISTEMA DE ARREFECIMENTO E REFREGERA\u00c7\u00c3O DO MOTOR","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4031","n":"4031","st":"Aprovadas","col":"realizado","pl":"GDH4B32","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"William Vidal Vieira","ho":0,"pr":1,"ti":1,"de":"2026-05-29","df":"2026-05-29","sv":[["FILTROS","Substituir","","Corretiva N\u00e3o Programada",1],["OLEO DO MOTOR","Substituir","","Corretiva N\u00e3o Programada",1],["SISTEMA DE ARREFECIMENTO E REFREGERA\u00c7\u00c3O DO MOTOR","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4030","n":"4030","st":"Aprovadas","col":"realizado","pl":"BSZ1I51","fa":"Mercedes-Benz","mo":"Axor 2041","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-05-28","df":"2026-05-28","sv":[["CINTO DE SEGURAN\u00c7A","Verificar","","Preventiva",1],["BUZINA","Testar","","Preventiva",1],["SISTEMA DE ILUMINA\u00c7\u00c3O E SINALIZA\u00c7\u00c3O","Verificar","","Preventiva",1],["TANQUE DE COMBUSTIVEL","Verificar","","Preventiva",1],["INTERCLIMA ; AR CONDICIONADO","Testar","","Preventiva",1],["FILTROS DIESEL","Substituir","","Preventiva",1],["FREIOS","Verificar","","Preventiva",1],["CARRETA","Verificar","","Preventiva",1],["LIMPADOR DO PARABRISA","Verificar","","Preventiva",1],["ILUMINA\u00c7\u00c3O DO CAVALO","Testar","","Preventiva",1],["FERRAMENTA OBRIGATORIA","Verificar","","Preventiva",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4029","n":"4029","st":"Aprovadas","col":"realizado","pl":"GCG4484","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"William Vidal Vieira","ho":0,"pr":1,"ti":1,"de":"2026-05-27","df":"2026-05-27","sv":[["SISTEMA PNEUMATICO ","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4028","n":"4028","st":"Aprovadas","col":"realizado","pl":"GHW9J07","fa":"Facchini","mo":"Ba\u00fa","ca":"Semi Reboque 3 Eixos Vanderleia","so":"Silverio Edwin Neil Sacho","ho":0,"pr":1,"ti":1,"de":"2026-05-29","df":"2026-05-29","sv":[["SISTEMA DE ILUMINA\u00c7\u00c3O E SINALIZA\u00c7\u00c3O","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4027","n":"4027","st":"Aprovadas","col":"realizado","pl":"GEZ7G76","fa":"Mercedes-Benz","mo":"Axor 2041","ca":"Cavalo Mec\u00e2nico Simples","so":"William Vidal Vieira","ho":0,"pr":1,"ti":1,"de":"2026-05-29","df":"2026-05-29","sv":[["FILTROS","Substituir","","Corretiva N\u00e3o Programada",1],["OLEO DO MOTOR","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4026","n":"4026","st":"Aprovadas","col":"realizado","pl":"SVU5F70","fa":"Mercedes-Benz","mo":"Actros","ca":"Cavalo Mec\u00e2nico Simples","so":"William Vidal Vieira","ho":0,"pr":1,"ti":1,"de":"2026-05-27","df":"2026-05-27","sv":[["FILTROS DIESEL","Substituir","","Corretiva N\u00e3o Programada",1],["OLEO DE CAMBIO E DIFERENCIAL","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4025","n":"4025","st":"Aprovadas","col":"realizado","pl":"FPT9C43","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-05-29","df":"2026-05-29","sv":[["OLEO DE CAMBIO E DIFERENCIAL","Substituir","","Preventiva",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4024","n":"4024","st":"Aprovadas","col":"realizado","pl":"FPT9C43","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-05-27","df":"2026-05-27","sv":[["CINTO DE SEGURAN\u00c7A","Verificar","","Preventiva",1],["CARRETA","Verificar","","Preventiva",1],["INTERCLIMA ; AR CONDICIONADO","Testar","","Preventiva",1],["TANQUE DE COMBUSTIVEL","Verificar","","Preventiva",1],["ILUMINA\u00c7\u00c3O DO CAVALO","Testar","","Preventiva",1],["FREIOS","Verificar","","Preventiva",1],["LIMPADOR DO PARABRISA","Verificar","","Preventiva",1],["PNEUS","Revisar","","Preventiva",1],["FERRAMENTA OBRIGATORIA","Verificar","","Preventiva",1],["BUZINA","Testar","","Preventiva",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4023","n":"4023","st":"Aprovadas","col":"realizado","pl":"EFF6H95","fa":"Mercedes-Benz","mo":"Axor 2041","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-05-29","df":"2026-05-29","sv":[["SISTEMA DE ILUMINA\u00c7\u00c3O E SINALIZA\u00c7\u00c3O","Verificar","","Preventiva",1],["PNEUS","Revisar","","Preventiva",1],["BUZINA","Testar","","Preventiva",1],["FREIOS","Verificar","","Preventiva",1],["TANQUE DE COMBUSTIVEL","Verificar","","Preventiva",1],["INTERCLIMA ; AR CONDICIONADO","Testar","","Preventiva",1],["ILUMINA\u00c7\u00c3O DO CAVALO","Testar","","Preventiva",1],["LIMPADOR DO PARABRISA","Verificar","","Preventiva",1],["CINTO DE SEGURAN\u00c7A","Verificar","","Preventiva",1],["FERRAMENTA OBRIGATORIA","Verificar","","Preventiva",1],["CARRETA","Verificar","","Preventiva",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4022","n":"4022","st":"Aprovadas","col":"realizado","pl":"FTX5J42","fa":"Mercedes-Benz","mo":"Axor 2041","ca":"Cavalo Mec\u00e2nico Simples","so":"William Vidal Vieira","ho":0,"pr":1,"ti":1,"de":"2026-05-26","df":"2026-05-26","sv":[["KIT DE CORREIA","Substituir","","Corretiva N\u00e3o Programada",1],["MOTOR","Substituir","","Corretiva N\u00e3o Programada",1],["LIMPADOR DO PARABRISA","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4021","n":"4021","st":"Aprovadas","col":"realizado","pl":"GBO2D62","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-05-23","df":"2026-05-23","sv":[["SISTEMA DE CARGA E PARTIDA","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4020","n":"4020","st":"Aprovadas","col":"realizado","pl":"FPT9C43","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-05-27","df":"2026-05-27","sv":[["SISTEMA DE ILUMINA\u00c7\u00c3O E SINALIZA\u00c7\u00c3O","Verificar","","Preventiva",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4019","n":"4019","st":"Aprovadas","col":"realizado","pl":"GGS8H68","fa":"Facchini","mo":"Ba\u00fa","ca":"Semi Reboque 3 Eixos Vanderleia","so":"Arnaldo Cesar de Morais","ho":0,"pr":1,"ti":1,"de":"2026-05-25","df":"2026-05-25","sv":[["ESTRUTURA EXTERNA DA CARRETA","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4018","n":"4018","st":"Aprovadas","col":"realizado","pl":"EEY2999","fa":"Facchini","mo":"Ba\u00fa","ca":"Semi Reboque 3 Eixos","so":"Arnaldo Cesar de Morais","ho":0,"pr":1,"ti":1,"de":"2026-05-25","df":"2026-05-25","sv":[["FREIOS","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4017","n":"4017","st":"Aprovadas","col":"realizado","pl":"SWH4C26","fa":"Facchini","mo":"Ba\u00fa","ca":"Semi Reboque 3 Eixos Vanderleia","so":"Arnaldo Cesar de Morais","ho":0,"pr":1,"ti":1,"de":"2026-05-25","df":"2026-05-25","sv":[["FREIOS","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4016","n":"4016","st":"Aprovadas","col":"realizado","pl":"BVT5F72","fa":"Facchini","mo":"Ba\u00fa","ca":"Semi Reboque 3 Eixos Vanderleia","so":"Arnaldo Cesar de Morais","ho":0,"pr":1,"ti":1,"de":"2026-05-22","df":"2026-05-22","sv":[["ESTRUTURA EXTERNA DA CARRETA","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4015","n":"4015","st":"Aprovadas","col":"realizado","pl":"TJD4B49","fa":"Facchini","mo":"Ba\u00fa","ca":"Semi Reboque 3 Eixos Vanderleia","so":"Arnaldo Cesar de Morais","ho":0,"pr":1,"ti":1,"de":"2026-05-21","df":"2026-05-21","sv":[["FREIOS","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4014","n":"4014","st":"Aprovadas","col":"realizado","pl":"EZX5G09","fa":"Facchini","mo":"Ba\u00fa","ca":"Semi Reboque 3 Eixos Vanderleia","so":"Arnaldo Cesar de Morais","ho":0,"pr":1,"ti":1,"de":"2026-05-20","df":"2026-05-20","sv":[["FREIOS","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4013","n":"4013","st":"Aprovadas","col":"realizado","pl":"EGT2H59","fa":"Facchini","mo":"Ba\u00fa","ca":"Semi Reboque 3 Eixos Vanderleia","so":"Arnaldo Cesar de Morais","ho":0,"pr":1,"ti":1,"de":"2026-05-20","df":"2026-05-20","sv":[["SISTEMA PNEUMATICO ","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4012","n":"4012","st":"Aprovadas","col":"realizado","pl":"FUO9C87","fa":"Facchini","mo":"Ba\u00fa","ca":"Semi Reboque 3 Eixos Vanderleia","so":"Arnaldo Cesar de Morais","ho":0,"pr":1,"ti":1,"de":"2026-05-20","df":"2026-05-20","sv":[["ESTRUTURA EXTERNA DA CARRETA","Reparar","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4011","n":"4011","st":"Aprovadas","col":"realizado","pl":"GBD0H85","fa":"Facchini","mo":"Ba\u00fa","ca":"Semi Reboque 3 Eixos Vanderleia","so":"Arnaldo Cesar de Morais","ho":0,"pr":1,"ti":1,"de":"2026-05-16","df":"2026-05-16","sv":[["FREIOS","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4009","n":"4009","st":"Aprovadas","col":"realizado","pl":"SWO5C39","fa":"Mercedes-Benz","mo":"Actros","ca":"Cavalo Mec\u00e2nico Simples","so":"Silverio Edwin Neil Sacho","ho":0,"pr":1,"ti":1,"de":"2026-05-25","df":"2026-05-25","sv":[["ILUMINA\u00c7\u00c3O DO CAVALO","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4008","n":"4008","st":"Aprovadas","col":"realizado","pl":"FQB1H13","fa":"Mercedes-Benz","mo":"Axor 2041","ca":"Cavalo Mec\u00e2nico Simples","so":"William Vidal Vieira","ho":0,"pr":1,"ti":1,"de":"2026-05-24","df":"2026-05-24","sv":[["FILTROS","Substituir","","Corretiva N\u00e3o Programada",1],["OLEO DO MOTOR","Substituir","","Corretiva N\u00e3o Programada",1],["KIT DE CORREIA","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4007","n":"4007","st":"Aprovadas","col":"realizado","pl":"FZP9H85","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"Jord\u00e3o cavalcante  barbosa","ho":0,"pr":1,"ti":1,"de":"2026-05-23","df":"2026-05-23","sv":[["SISTEMA DE ARREFECIMENTO E REFREGERA\u00c7\u00c3O DO MOTOR","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4006","n":"4006","st":"Aprovadas","col":"realizado","pl":"GIT8H34","fa":"Mercedes-Benz","mo":"Axor 2041","ca":"Cavalo Mec\u00e2nico Simples","so":"William Vidal Vieira","ho":0,"pr":1,"ti":1,"de":"2026-05-21","df":"2026-05-21","sv":[["FILTROS","Substituir","","Corretiva N\u00e3o Programada",1],["OLEO DO MOTOR","Substituir","","Corretiva N\u00e3o Programada",1],["KIT DE CORREIA","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4005","n":"4005","st":"Aprovadas","col":"realizado","pl":"GHR2I92","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"William Vidal Vieira","ho":0,"pr":1,"ti":1,"de":"2026-05-21","df":"2026-05-21","sv":[["ILUMINA\u00c7\u00c3O DO CAVALO","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4004","n":"4004","st":"Aprovadas","col":"realizado","pl":"GDQ7466","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"Jord\u00e3o cavalcante  barbosa","ho":0,"pr":1,"ti":1,"de":"2026-05-21","df":"2026-05-21","sv":[["SISTEMA PNEUMATICO ","Substituir","","Corretiva N\u00e3o Programada",1],["SISTEMA DIRE\u00c7\u00c3O E SUSPENS\u00c3O","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4003","n":"4003","st":"Aprovadas","col":"realizado","pl":"EXN4E86","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-05-25","df":"2026-05-25","sv":[["FILTROS DIESEL","Substituir","","Preventiva",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4002","n":"4002","st":"Aprovadas","col":"realizado","pl":"GBQ7715","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"William Vidal Vieira","ho":0,"pr":1,"ti":1,"de":"2026-05-21","df":"2026-05-21","sv":[["SISTEMA DE CARGA E PARTIDA","Substituir","","Corretiva N\u00e3o Programada",1],["OLEO DO MOTOR","Completar","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4001","n":"4001","st":"Aprovadas","col":"realizado","pl":"DMC2D69","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-05-25","df":"2026-05-25","sv":[["EMBREAGEM ","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl4000","n":"4000","st":"Aprovadas","col":"realizado","pl":"FYV1A35","fa":"Mercedes-Benz","mo":"Axor 2041","ca":"Cavalo Mec\u00e2nico Simples","so":"Silverio Edwin Neil Sacho","ho":0,"pr":1,"ti":1,"de":"2026-05-20","df":"2026-05-20","sv":[["ILUMINA\u00c7\u00c3O DO CAVALO","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3999","n":"3999","st":"Aprovadas","col":"realizado","pl":"GJV3D75","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-05-25","df":"2026-05-25","sv":[["KIT DE CORREIA","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3998","n":"3998","st":"Aprovadas","col":"realizado","pl":"FXA7G03","fa":"Mercedes-Benz","mo":"Axor 2041","ca":"Cavalo Mec\u00e2nico Simples","so":"Jord\u00e3o cavalcante  barbosa","ho":0,"pr":1,"ti":1,"de":"2026-05-20","df":"2026-05-20","sv":[["SISTEMA DE ARREFECIMENTO E REFREGERA\u00c7\u00c3O DO MOTOR","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3997","n":"3997","st":"Aprovadas","col":"realizado","pl":"DZD0E66","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"William Vidal Vieira","ho":0,"pr":1,"ti":1,"de":"2026-05-20","df":"2026-05-20","sv":[["KIT DE CORREIA","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3996","n":"3996","st":"Aprovadas","col":"realizado","pl":"EBL2119","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"Jord\u00e3o cavalcante  barbosa","ho":0,"pr":1,"ti":1,"de":"2026-05-30","df":"2026-05-30","sv":[["EMBREAGEM ","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3995","n":"3995","st":"Aprovadas","col":"realizado","pl":"GES6145","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"William Vidal Vieira","ho":0,"pr":1,"ti":1,"de":"2026-05-25","df":"2026-05-25","sv":[["ILUMINA\u00c7\u00c3O DO CAVALO","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3994","n":"3994","st":"Aprovadas","col":"realizado","pl":"GHC3D23","fa":"Facchini","mo":"Ba\u00fa","ca":"Semi Reboque 3 Eixos Vanderleia","so":"Jord\u00e3o cavalcante  barbosa","ho":0,"pr":1,"ti":1,"de":"2026-05-19","df":"2026-05-19","sv":[["FREIOS","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3993","n":"3993","st":"Aprovadas","col":"realizado","pl":"FPT9C43","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-05-24","df":"2026-05-24","sv":[["NIVEL DE OLEO DO MOTOR","Substituir","","Preventiva",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3992","n":"3992","st":"Aprovadas","col":"realizado","pl":"FOO4B98","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-05-24","df":"2026-05-24","sv":[["SISTEMA DE ILUMINA\u00c7\u00c3O E SINALIZA\u00c7\u00c3O","Verificar","","Preventiva",1],["TANQUE DE COMBUSTIVEL","Verificar","","Preventiva",1],["FREIOS","Verificar","","Preventiva",1],["BUZINA","Testar","","Preventiva",1],["PNEUS","Revisar","","Preventiva",1],["CINTO DE SEGURAN\u00c7A","Verificar","","Preventiva",1],["FERRAMENTA OBRIGATORIA","Verificar","","Preventiva",1],["LIMPADOR DO PARABRISA","Verificar","","Preventiva",1],["INTERCLIMA ; AR CONDICIONADO","Testar","","Preventiva",1],["CARRETA","Verificar","","Preventiva",1],["ILUMINA\u00c7\u00c3O DO CAVALO","Testar","","Preventiva",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3991","n":"3991","st":"Aprovadas","col":"realizado","pl":"EWF0H96","fa":"Mercedes-Benz","mo":"Axor 2041","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-05-24","df":"2026-05-24","sv":[["SISTEMA DE ILUMINA\u00c7\u00c3O E SINALIZA\u00c7\u00c3O","Verificar","","Preventiva",1],["TANQUE DE COMBUSTIVEL","Verificar","","Preventiva",1],["PNEUS","Revisar","","Preventiva",1],["INTERCLIMA ; AR CONDICIONADO","Testar","","Preventiva",1],["LIMPADOR DO PARABRISA","Verificar","","Preventiva",1],["FREIOS","Verificar","","Preventiva",1],["FERRAMENTA OBRIGATORIA","Verificar","","Preventiva",1],["ILUMINA\u00c7\u00c3O DO CAVALO","Testar","","Preventiva",1],["BUZINA","Testar","","Preventiva",1],["CINTO DE SEGURAN\u00c7A","Verificar","","Preventiva",1],["CARRETA","Verificar","","Preventiva",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3990","n":"3990","st":"Aprovadas","col":"realizado","pl":"ELE7344","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-05-24","df":"2026-05-24","sv":[["TANQUE DE COMBUSTIVEL","Verificar","","Preventiva",1],["INTERCLIMA ; AR CONDICIONADO","Testar","","Preventiva",1],["PNEUS","Revisar","","Preventiva",1],["CARRETA","Verificar","","Preventiva",1],["CINTO DE SEGURAN\u00c7A","Verificar","","Preventiva",1],["LIMPADOR DO PARABRISA","Verificar","","Preventiva",1],["ILUMINA\u00c7\u00c3O DO CAVALO","Testar","","Preventiva",1],["BUZINA","Testar","","Preventiva",1],["SISTEMA DE ILUMINA\u00c7\u00c3O E SINALIZA\u00c7\u00c3O","Verificar","","Preventiva",1],["FERRAMENTA OBRIGATORIA","Verificar","","Preventiva",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3989","n":"3989","st":"Aprovadas","col":"realizado","pl":"BSZ1I51","fa":"Mercedes-Benz","mo":"Axor 2041","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-05-24","df":"2026-05-24","sv":[["PNEUS","Revisar","","Preventiva",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3988","n":"3988","st":"Aprovadas","col":"realizado","pl":"BXZ6A22","fa":"Mercedes-Benz","mo":"Axor 2041","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-05-23","df":"2026-05-23","sv":[["SISTEMA DE ILUMINA\u00c7\u00c3O E SINALIZA\u00c7\u00c3O","Verificar","","Preventiva",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3987","n":"3987","st":"Aprovadas","col":"realizado","pl":"BZG8698","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-05-23","df":"2026-05-23","sv":[["FILTRO DE OLEO DO MOTOR","Substituir","","Preventiva",1],["NIVEL DE OLEO DO MOTOR","Substituir","","Preventiva",1],["FILTRO DE AR DO MOTOR","Substituir","","Preventiva",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3986","n":"3986","st":"Aprovadas","col":"realizado","pl":"GDL1255","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"William Vidal Vieira","ho":0,"pr":1,"ti":1,"de":"2026-05-22","df":"2026-05-22","sv":[["ILUMINA\u00c7\u00c3O DO CAVALO","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3985","n":"3985","st":"Aprovadas","col":"realizado","pl":"FJD8J11","fa":"Mercedes-Benz","mo":"Axor 2041","ca":"Cavalo Mec\u00e2nico Simples","so":"William Vidal Vieira","ho":0,"pr":1,"ti":1,"de":"2026-05-19","df":"2026-05-19","sv":[["ILUMINA\u00c7\u00c3O DO CAVALO","Substituir","","Corretiva N\u00e3o Programada",1],["OLEO DO MOTOR","Completar","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3984","n":"3984","st":"Aprovadas","col":"realizado","pl":"FJB5F85","fa":"Facchini","mo":"Ba\u00fa","ca":"Semi Reboque 3 Eixos Vanderleia","so":"Jord\u00e3o cavalcante  barbosa","ho":0,"pr":1,"ti":1,"de":"2026-05-19","df":"2026-05-19","sv":[["FREIOS","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3983","n":"3983","st":"Aprovadas","col":"realizado","pl":"CGS6D85","fa":"Mercedes-Benz","mo":"Axor 2041","ca":"Cavalo Mec\u00e2nico Simples","so":"William Vidal Vieira","ho":0,"pr":1,"ti":1,"de":"2026-05-19","df":"2026-05-19","sv":[["OLEO DO MOTOR","Completar","","Corretiva N\u00e3o Programada",1],["ILUMINA\u00c7\u00c3O DO CAVALO","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3982","n":"3982","st":"Aprovadas","col":"realizado","pl":"ELE7344","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-05-22","df":"2026-05-22","sv":[["FREIOS","Verificar","","Preventiva",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3981","n":"3981","st":"Aprovadas","col":"realizado","pl":"FPU0F53","fa":"Mercedes-Benz","mo":"Axor 2041","ca":"Cavalo Mec\u00e2nico Simples","so":"William Vidal Vieira","ho":0,"pr":1,"ti":1,"de":"2026-05-19","df":"2026-05-19","sv":[["MOTOR","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3980","n":"3980","st":"Aprovadas","col":"realizado","pl":"UFY3I79","fa":"Scania","mo":"R450","ca":"Cavalo Mec\u00e2nico Simples","so":"Silverio Edwin Neil Sacho","ho":0,"pr":1,"ti":1,"de":"2026-05-18","df":"2026-05-18","sv":[["FILTROS DIESEL","Substituir","","Corretiva Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3979","n":"3979","st":"Aprovadas","col":"realizado","pl":"GHC3D23","fa":"Facchini","mo":"Ba\u00fa","ca":"Semi Reboque 3 Eixos Vanderleia","so":"Jord\u00e3o cavalcante  barbosa","ho":0,"pr":1,"ti":1,"de":"2026-05-21","df":"2026-05-21","sv":[["FREIOS","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3978","n":"3978","st":"Aprovadas","col":"realizado","pl":"GBQ7715","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"Silverio Edwin Neil Sacho","ho":0,"pr":1,"ti":1,"de":"2026-05-18","df":"2026-05-18","sv":[["ARLA ","Revisar","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3977","n":"3977","st":"Aprovadas","col":"realizado","pl":"GJV6737","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"Silverio Edwin Neil Sacho","ho":0,"pr":1,"ti":1,"de":"2026-05-18","df":"2026-05-18","sv":[["SISTEMA DE ARREFECIMENTO E REFREGERA\u00c7\u00c3O DO MOTOR","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3976","n":"3976","st":"Aprovadas","col":"realizado","pl":"EWB1177","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"FRANCISCO CESARIO NETO","ho":0,"pr":1,"ti":1,"de":"2026-05-18","df":"2026-05-18","sv":[["INJE\u00c7\u00c3O E DIAGNOSTICO","Aferir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3975","n":"3975","st":"Aprovadas","col":"realizado","pl":"EVU2D08","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"William Vidal Vieira","ho":0,"pr":1,"ti":1,"de":"2026-05-18","df":"2026-05-18","sv":[["MOTOR","Substituir","","Corretiva N\u00e3o Programada",1],["SISTEMA DE ARREFECIMENTO E REFREGERA\u00c7\u00c3O DO MOTOR","Substituir","","Corretiva N\u00e3o Programada",1],["SISTEMA ELETRONICO","Substituir","","Corretiva N\u00e3o Programada",1],["SISTEMA PNEUMATICO ","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3974","n":"3974","st":"Aprovadas","col":"realizado","pl":"FQB1H13","fa":"Mercedes-Benz","mo":"Axor 2041","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-05-20","df":"2026-05-20","sv":[["FILTRO DE AR DO MOTOR","Substituir","","Preventiva",1],["FILTRO DE OLEO DO MOTOR","Substituir","","Preventiva",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3973","n":"3973","st":"Aprovadas","col":"realizado","pl":"TLB0I39","fa":"Mercedes-Benz","mo":"Actros","ca":"Cavalo Mec\u00e2nico Simples","so":"William Vidal Vieira","ho":0,"pr":1,"ti":1,"de":"2026-05-18","df":"2026-05-18","sv":[["FILTROS DIESEL","Substituir","","Corretiva N\u00e3o Programada",1],["OLEO DO MOTOR","Completar","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3972","n":"3972","st":"Aprovadas","col":"realizado","pl":"DRF4J21","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"Silverio Edwin Neil Sacho","ho":0,"pr":1,"ti":1,"de":"2026-05-18","df":"2026-05-18","sv":[["EMBREAGEM ","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3971","n":"3971","st":"Aprovadas","col":"realizado","pl":"UDA1G71","fa":"Scania","mo":"R450","ca":"Cavalo Mec\u00e2nico Simples","so":"Silverio Edwin Neil Sacho","ho":0,"pr":1,"ti":1,"de":"2026-05-15","df":"2026-05-15","sv":[["TANQUE DE COMBUSTIVEL","Revisar","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3970","n":"3970","st":"Aprovadas","col":"realizado","pl":"EWV9226","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"William Vidal Vieira","ho":0,"pr":1,"ti":1,"de":"2026-05-18","df":"2026-05-18","sv":[["TANQUE DE COMBUSTIVEL","Revisar","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3969","n":"3969","st":"Aprovadas","col":"realizado","pl":"FOO4B98","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"William Vidal Vieira","ho":0,"pr":1,"ti":1,"de":"2026-05-18","df":"2026-05-18","sv":[["ILUMINA\u00c7\u00c3O DO CAVALO","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3968","n":"3968","st":"Aprovadas","col":"realizado","pl":"DWR0028","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"William Vidal Vieira","ho":0,"pr":1,"ti":1,"de":"2026-05-18","df":"2026-05-18","sv":[["ILUMINA\u00c7\u00c3O DO CAVALO","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3967","n":"3967","st":"Aprovadas","col":"realizado","pl":"GKB8J64","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"Silverio Edwin Neil Sacho","ho":0,"pr":1,"ti":1,"de":"2026-05-16","df":"2026-05-16","sv":[["SISTEMA DE ARREFECIMENTO E REFREGERA\u00c7\u00c3O DO MOTOR","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3966","n":"3966","st":"Aprovadas","col":"realizado","pl":"EWB1177","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"Silverio Edwin Neil Sacho","ho":0,"pr":1,"ti":1,"de":"2026-05-16","df":"2026-05-16","sv":[["FILTROS DIESEL","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3965","n":"3965","st":"Aprovadas","col":"realizado","pl":"GIG8F54","fa":"Mercedes-Benz","mo":"Actros","ca":"Cavalo Mec\u00e2nico Simples","so":"Jord\u00e3o cavalcante  barbosa","ho":0,"pr":1,"ti":1,"de":"2026-05-16","df":"2026-05-16","sv":[["OLEO DE CAMBIO E DIFERENCIAL","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3964","n":"3964","st":"Aprovadas","col":"realizado","pl":"GBQ7715","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"William Vidal Vieira","ho":0,"pr":1,"ti":1,"de":"2026-05-15","df":"2026-05-15","sv":[["ILUMINA\u00c7\u00c3O DO CAVALO","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3963","n":"3963","st":"Aprovadas","col":"realizado","pl":"DRF4J21","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-05-19","df":"2026-05-19","sv":[["BUZINA","Testar","","Preventiva",1],["FERRAMENTA OBRIGATORIA","Verificar","","Preventiva",1],["LIMPADOR DO PARABRISA","Verificar","","Preventiva",1],["CINTO DE SEGURAN\u00c7A","Verificar","","Preventiva",1],["INTERCLIMA ; AR CONDICIONADO","Testar","","Preventiva",1],["TANQUE DE COMBUSTIVEL","Verificar","","Preventiva",1],["FREIOS","Verificar","","Preventiva",1],["PNEUS","Revisar","","Preventiva",1],["CARRETA","Verificar","","Preventiva",1],["ILUMINA\u00c7\u00c3O DO CAVALO","Testar","","Preventiva",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3962","n":"3962","st":"Aprovadas","col":"realizado","pl":"EOC6D51","fa":"Mercedes-Benz","mo":"Axor 2041","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-05-19","df":"2026-05-19","sv":[["NIVEL DE OLEO DO MOTOR","Substituir","","Preventiva",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3961","n":"3961","st":"Aprovadas","col":"realizado","pl":"BXZ6A22","fa":"Mercedes-Benz","mo":"Axor 2041","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-05-19","df":"2026-05-19","sv":[["PNEUS","Revisar","","Preventiva",1],["BUZINA","Testar","","Preventiva",1],["ILUMINA\u00c7\u00c3O DO CAVALO","Testar","","Preventiva",1],["INTERCLIMA ; AR CONDICIONADO","Testar","","Preventiva",1],["CINTO DE SEGURAN\u00c7A","Verificar","","Preventiva",1],["TANQUE DE COMBUSTIVEL","Verificar","","Preventiva",1],["LIMPADOR DO PARABRISA","Verificar","","Preventiva",1],["FERRAMENTA OBRIGATORIA","Verificar","","Preventiva",1],["CARRETA","Verificar","","Preventiva",1],["FREIOS","Verificar","","Preventiva",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3960","n":"3960","st":"Aprovadas","col":"realizado","pl":"DYH6I81","fa":"Mercedes-Benz","mo":"Axor 2041","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-05-17","df":"2026-05-17","sv":[["PNEUS","Revisar","","Preventiva",1],["LIMPADOR DO PARABRISA","Verificar","","Preventiva",1],["CARRETA","Verificar","","Preventiva",1],["INTERCLIMA ; AR CONDICIONADO","Testar","","Preventiva",1],["FERRAMENTA OBRIGATORIA","Verificar","","Preventiva",1],["FREIOS","Verificar","","Preventiva",1],["TANQUE DE COMBUSTIVEL","Verificar","","Preventiva",1],["BUZINA","Testar","","Preventiva",1],["ILUMINA\u00c7\u00c3O DO CAVALO","Testar","","Preventiva",1],["FILTROS DIESEL","Substituir","","Preventiva",1],["CINTO DE SEGURAN\u00c7A","Verificar","","Preventiva",1],["SISTEMA DE ILUMINA\u00c7\u00c3O E SINALIZA\u00c7\u00c3O","Verificar","","Preventiva",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3959","n":"3959","st":"Aprovadas","col":"realizado","pl":"GAT9905","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-05-17","df":"2026-05-17","sv":[["FREIOS","Verificar","","Preventiva",1],["SISTEMA DE ILUMINA\u00c7\u00c3O E SINALIZA\u00c7\u00c3O","Verificar","","Preventiva",1],["FERRAMENTA OBRIGATORIA","Verificar","","Preventiva",1],["INTERCLIMA ; AR CONDICIONADO","Testar","","Preventiva",1],["LIMPADOR DO PARABRISA","Verificar","","Preventiva",1],["CARRETA","Verificar","","Preventiva",1],["BUZINA","Testar","","Preventiva",1],["ILUMINA\u00c7\u00c3O DO CAVALO","Testar","","Preventiva",1],["CINTO DE SEGURAN\u00c7A","Verificar","","Preventiva",1],["PNEUS","Revisar","","Preventiva",1],["TANQUE DE COMBUSTIVEL","Verificar","","Preventiva",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3958","n":"3958","st":"Aprovadas","col":"realizado","pl":"ECV3I01","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-05-17","df":"2026-05-17","sv":[["OLEO DE CAMBIO E DIFERENCIAL","Substituir","","Preventiva",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3957","n":"3957","st":"Aprovadas","col":"realizado","pl":"GAT9905","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-05-15","df":"2026-05-15","sv":[["FILTROS DIESEL","Substituir","","Preventiva",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3956","n":"3956","st":"Aprovadas","col":"realizado","pl":"GBQ7715","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"FRANCISCO CESARIO NETO","ho":0,"pr":1,"ti":1,"de":"2026-05-15","df":"2026-05-15","sv":[["INJE\u00c7\u00c3O E DIAGNOSTICO","Testar","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3955","n":"3955","st":"Aprovadas","col":"realizado","pl":"FPT9C43","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"FRANCISCO CESARIO NETO","ho":0,"pr":1,"ti":1,"de":"2026-05-15","df":"2026-05-15","sv":[["ILUMINA\u00c7\u00c3O DO CAVALO","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3954","n":"3954","st":"Aprovadas","col":"realizado","pl":"GBQ7715","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"William Vidal Vieira","ho":0,"pr":1,"ti":1,"de":"2026-05-15","df":"2026-05-15","sv":[["SISTEMA DE CARGA E PARTIDA","Substituir","","Corretiva N\u00e3o Programada",1],["SISTEMA DE ILUMINA\u00c7\u00c3O E SINALIZA\u00c7\u00c3O","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3953","n":"3953","st":"Aprovadas","col":"realizado","pl":"SVO7H59","fa":"Mercedes-Benz","mo":"Actros","ca":"Cavalo Mec\u00e2nico Simples","so":"Jord\u00e3o cavalcante  barbosa","ho":0,"pr":1,"ti":1,"de":"2026-05-15","df":"2026-05-15","sv":[["FILTROS DIESEL","Substituir","","Corretiva N\u00e3o Programada",1],["OLEO DE CAMBIO E DIFERENCIAL","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3952","n":"3952","st":"Aprovadas","col":"realizado","pl":"FYV1A35","fa":"Mercedes-Benz","mo":"Axor 2041","ca":"Cavalo Mec\u00e2nico Simples","so":"William Vidal Vieira","ho":0,"pr":1,"ti":1,"de":"2026-05-14","df":"2026-05-14","sv":[["FILTROS","Substituir","","Corretiva N\u00e3o Programada",1],["OLEO DO MOTOR","Substituir","","Corretiva N\u00e3o Programada",1],["KIT DE CORREIA","Substituir","","Corretiva N\u00e3o Programada",1],["ITENS EXTERNOS DA CABINE","Substituir","","Corretiva N\u00e3o Programada",1],["SISTEMA DE CARGA E PARTIDA","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3951","n":"3951","st":"Aprovadas","col":"realizado","pl":"DWR0028","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-05-15","df":"2026-05-15","sv":[["OLEO DE CAMBIO E DIFERENCIAL","Substituir","","Preventiva",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3950","n":"3950","st":"Aprovadas","col":"realizado","pl":"GKB8J64","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"William Vidal Vieira","ho":0,"pr":1,"ti":1,"de":"2026-05-14","df":"2026-05-14","sv":[["SISTEMA ELETRONICO","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3949","n":"3949","st":"Aprovadas","col":"realizado","pl":"GJP3H54","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"William Vidal Vieira","ho":0,"pr":1,"ti":1,"de":"2026-05-14","df":"2026-05-14","sv":[["SISTEMA DE CARGA E PARTIDA","Substituir","","Corretiva N\u00e3o Programada",1],["ILUMINA\u00c7\u00c3O DO CAVALO","Substituir","","Corretiva N\u00e3o Programada",1],["ITENS EXTERNOS DA CABINE","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3948","n":"3948","st":"Aprovadas","col":"realizado","pl":"BXZ6A22","fa":"Mercedes-Benz","mo":"Axor 2041","ca":"Cavalo Mec\u00e2nico Simples","so":"William Vidal Vieira","ho":0,"pr":1,"ti":1,"de":"2026-05-14","df":"2026-05-14","sv":[["FILTROS","Substituir","","Corretiva N\u00e3o Programada",1],["OLEO DO MOTOR","Substituir","","Corretiva N\u00e3o Programada",1],["ILUMINA\u00c7\u00c3O DO CAVALO","Substituir","","Corretiva N\u00e3o Programada",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3940","n":"3940","st":"Aprovadas","col":"realizado","pl":"BSZ1I51","fa":"Mercedes-Benz","mo":"Axor 2041","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-05-14","df":"2026-05-14","sv":[["NIVEL DE OLEO DO MOTOR","Substituir","","Preventiva",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3935","n":"3935","st":"Aprovadas","col":"realizado","pl":"ECV3I01","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-05-14","df":"2026-05-14","sv":[["NIVEL DE OLEO DO MOTOR","Substituir","","Preventiva",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001},{"i":"xl3930","n":"3930","st":"Aprovadas","col":"realizado","pl":"ELE7344","fa":"Mercedes-Benz","mo":"Axor 2036","ca":"Cavalo Mec\u00e2nico Simples","so":"","ho":0,"pr":1,"ti":1,"de":"2026-05-14","df":"2026-05-14","sv":[["FILTRO DE AR DO MOTOR","Substituir","","Preventiva",1],["FILTRO DE OLEO DO MOTOR","Substituir","","Preventiva",1]],"fonte":"gestran_xlsx","updatedAt":1780500000001}];
   // Merge por numero (n) no osData ja carregado (tem OS_DEFAULT + locais)
   var mapN = {};
@@ -6442,8 +6664,8 @@ var osPlacaFiltro = null;
     if (!mapN[String(o.n)]) { osData.push(o); mapN[String(o.n)] = o; adicionadas++; }
   });
   // Salva o osData completo (OS_DEFAULT + locais + 117 novas)
-  try { localStorage.setItem('tc_os_data', JSON.stringify(osData)); } catch(e){}
-  localStorage.setItem(RKEY, '1');
+  try { TCStore.setItem('tc_os_data', JSON.stringify(osData)); } catch(e){}
+  TCStore.setItem(RKEY, '1');
   console.log('[TRANSCCEMA] RESTORE OS: ' + adicionadas + ' OS adicionadas. Total: ' + osData.length);
 })();
 var osPagina = 0;
@@ -6486,7 +6708,7 @@ function importarOS(evt) {
           df:(o.dataEncerramento||o.df||'').slice(0,10),sv:sv};
       });
       osData.sort(function(a,b){return (b.df||b.de).localeCompare(a.df||a.de);});
-      try{localStorage.setItem("tc_os_data",JSON.stringify(osData));}catch(e){}
+      try{TCStore.setItem("tc_os_data",JSON.stringify(osData));}catch(e){}
       buildOSFilters(); renderOSView();
       showToast("Importadas "+osData.length+" OS!");
       var banner=ge("os-import-banner"); if(banner) banner.style.display="none";
@@ -6693,7 +6915,7 @@ function moverOS(osId, novaCol) {
     var labels = {entrada:'Entrada', realizando:'Em Execucao', realizado:'Servico Realizado'};
     return Object.assign({}, o, {col:novaCol, st:labels[novaCol]||o.st, updatedAt:bumpTs(o)});
   });
-  try { localStorage.setItem("tc_os_data", JSON.stringify(osData)); } catch(e){}
+  try { TCStore.setItem("tc_os_data", JSON.stringify(osData)); } catch(e){}
   saveAll();
   renderOSKanban();
   showToast("OS movida para: " + ({entrada:'Entrada na Manutencao',realizando:'Realizando Servico',realizado:'Servico Realizado'}[novaCol]));
@@ -6842,7 +7064,7 @@ function salvarEdicaoOS(id){
   var novoEl=ge("edos-sv-novo"); if(novoEl&&novoEl.value.trim()){ novoSv.push([novoEl.value.trim(),(o.ti===2?"Externa":"Interna"),"","",(o.ti||1)]); }
   if(novoSv.length) o.sv=novoSv;
   o.updatedAt=Date.now();
-  try{ localStorage.setItem("tc_os_data", JSON.stringify(osData)); }catch(e){}
+  try{ TCStore.setItem("tc_os_data", JSON.stringify(osData)); }catch(e){}
   saveAll();
   closeModal();
   showToast("OS "+o.n+" atualizada!");
@@ -7283,7 +7505,7 @@ function confirmarNovaOS() {
   };
 
   osData.unshift(novaOS);
-  try { localStorage.setItem("tc_os_data", JSON.stringify(osData)); } catch(e){}
+  try { TCStore.setItem("tc_os_data", JSON.stringify(osData)); } catch(e){}
 
   saveAll();
   closeModal();
@@ -7346,14 +7568,14 @@ var DEFAULT_USERS = [
 ];
 // Hash padrao: "admin" com SHA-256 simples (senha: admin)
 
-// Merge default users with localStorage (preserves existing customizations)
+// Merge default users with TCStore (preserves existing customizations)
 // v2 - force refresh if modules changed
-var _storedUsers = JSON.parse(localStorage.getItem(USERS_KEY) || "[]");
+var _storedUsers = JSON.parse(TCStore.getItem(USERS_KEY) || "[]");
 // Reset if default users changed (check by version)
-if (localStorage.getItem("tc_users_ver") !== "v6") {
+if (TCStore.getItem("tc_users_ver") !== "v6") {
   _storedUsers = [];
-  localStorage.removeItem(USERS_KEY);
-  localStorage.setItem("tc_users_ver","v6");
+  TCStore.removeItem(USERS_KEY);
+  TCStore.setItem("tc_users_ver","v6");
 }
 var tcUsers = _storedUsers.length > 0 ? _storedUsers : JSON.parse(JSON.stringify(DEFAULT_USERS));
 // Add any missing default users
@@ -7361,7 +7583,7 @@ DEFAULT_USERS.forEach(function(du) {
   var exists = tcUsers.some(function(u){ return u.id === du.id; });
   if (!exists) tcUsers.push(du);
 });
-localStorage.setItem(USERS_KEY, JSON.stringify(tcUsers));
+TCStore.setItem(USERS_KEY, JSON.stringify(tcUsers));
 var currentUser = null;
 
 // Carrega sessao
@@ -7632,7 +7854,7 @@ async function salvarUsuario(editId) {
     });
   }
 
-  localStorage.setItem(USERS_KEY, JSON.stringify(tcUsers));
+  TCStore.setItem(USERS_KEY, JSON.stringify(tcUsers));
   closeModal();
   renderUsuarios();
   showToast(editId ? "Usuario atualizado!" : "Usuario criado com sucesso!");
@@ -7643,7 +7865,7 @@ function editarUsuario(id) { abrirNovoUsuario(id); }
 function excluirUsuario(id) {
   if (!confirm("Excluir este usuario?")) return;
   tcUsers = tcUsers.filter(function(u){ return u.id !== id; });
-  localStorage.setItem(USERS_KEY, JSON.stringify(tcUsers));
+  TCStore.setItem(USERS_KEY, JSON.stringify(tcUsers));
   renderUsuarios();
   showToast("Usuario excluido.");
 }
@@ -7892,7 +8114,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 87 - TROCAR O CAVALO ATUALIZA O CONJUNTO</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 88 - MEMORIA AMPLIADA (INDEXEDDB)</div>
   </div>
 </div>
 </body></html>
