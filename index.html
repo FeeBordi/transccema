@@ -1334,13 +1334,33 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
     }
     window.addEventListener = embrulhar(origWin, window);
     document.addEventListener = embrulhar(origDoc, document);
-    try{
-      var s = document.createElement("script");
-      s.text = el.textContent;
-      el.parentNode.insertBefore(s, el.nextSibling);
-    }finally{
+    var restaurado = false;
+    function restaurar(){
+      if(restaurado) return; restaurado = true;
       window.addEventListener = origWin;
       document.addEventListener = origDoc;
+    }
+    var codigo = el.textContent;
+    var url = null;
+    try{ url = URL.createObjectURL(new Blob([codigo], { type: "text/javascript" })); }catch(e){ url = null; }
+    var s = document.createElement("script");
+    if(url){
+      // Carrega como arquivo (blob) - nao copia o texto do script, que e muito grande
+      s.async = false;
+      s.onload = function(){ restaurar(); try{ URL.revokeObjectURL(url); }catch(_){} };
+      s.onerror = function(){
+        restaurar();
+        try{ console.error("[TRANSCCEMA] Falha ao carregar o script principal via blob; tentando direto"); }catch(_){}
+        var s2 = document.createElement("script");
+        window.addEventListener = embrulhar(origWin, window);
+        document.addEventListener = embrulhar(origDoc, document);
+        restaurado = false;
+        try{ s2.text = codigo; el.parentNode.insertBefore(s2, el.nextSibling); }finally{ restaurar(); }
+      };
+      s.src = url;
+      el.parentNode.insertBefore(s, el.nextSibling);
+    }else{
+      try{ s.text = codigo; el.parentNode.insertBefore(s, el.nextSibling); }finally{ restaurar(); }
     }
   }
 
