@@ -1309,8 +1309,9 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
   function iniciarApp(){
     if(appIniciado) return; appIniciado = true;
     var el = document.getElementById("tcAppScript");
-    if(!el && document.readyState === "loading"){
-      // a pagina ainda nao terminou de ler o script principal: espera
+    if(document.readyState === "loading"){
+      // a pagina ainda esta lendo o script principal (ele e muito grande):
+      // espera terminar, senao o codigo vem pela metade
       appIniciado = false;
       document.addEventListener("DOMContentLoaded", iniciarApp);
       return;
@@ -8134,7 +8135,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 88 - MEMORIA AMPLIADA (INDEXEDDB)</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 89 - MEMORIA AMPLIADA (INDEXEDDB)</div>
   </div>
 </div>
 </body></html>
