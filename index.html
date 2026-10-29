@@ -563,7 +563,8 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
           <button class="btn btn-g" onclick="printPV()">&#128424; Imprimir</button>
           <button class="btn btn-g" onclick="openPVRegistrar()">&#10003; Registrar troca</button>
           <button class="btn btn-g" onclick="openPVPlano()">&#9881; Plano de manutencao</button>
-          <button class="btn btn-p" onclick="pvAtualizarKM()">&#8635; Atualizar KM</button>
+          <button class="btn btn-g" onclick="pvAtualizarKM()">&#8635; KM do abastecimento</button>
+          <button class="btn btn-p" onclick="openPVGobrax()">&#128667; KM do Gobrax</button>
         </div>
       </div>
       <div class="mk-stats" id="pv-counters"></div>
@@ -2194,7 +2195,126 @@ function odoPorPlaca(){
       });
     });
   } catch(e){}
+  // 4) Gobrax (odometro da telemetria) tem prioridade sobre todas as outras fontes:
+  //    abastecimento, OS e cartoes podem ter KM digitado errado, o Gobrax nao.
+  try {
+    var gb = pvOdoGobrax();
+    Object.keys(gb.leituras||{}).forEach(function(k){
+      var o = gb.leituras[k];
+      if(!o) return;
+      var km = pvNum(o.km);
+      if(km<=0 || km>PV_KM_MAX) return;
+      m[k] = {placa:String(o.placa||k).toUpperCase(), km:km, data:String(o.data||gb.data||"").slice(0,10), fonte:"Gobrax"};
+    });
+  } catch(e){ try{ console.error("[PV] odometro Gobrax:", e); }catch(_){} }
   return m;
+}
+
+// ---------- ODOMETRO DO GOBRAX ----------
+// As leituras viajam dentro do planoManut (registro de sistema, marcado como deleted
+// para nao aparecer na lista do plano), porque o servidor so grava campos conhecidos.
+var PV_GOBRAX_ID = "__odo_gobrax__";
+function pvOdoGobrax(){
+  var reg = null;
+  (planoManut||[]).forEach(function(i){ if(i && i.id===PV_GOBRAX_ID) reg = i; });
+  if(!reg || !reg.leituras || typeof reg.leituras!=="object") return {data:"", leituras:{}, updatedAt:0};
+  return reg;
+}
+// lista: [[placa, km], ...] ou {placa: km}. Devolve quantas placas foram gravadas.
+function pvSalvarOdoGobrax(lista, data){
+  var dia = String(data||pvHoje()).slice(0,10);
+  var pares = [];
+  if(Array.isArray(lista)) pares = lista;
+  else if(lista && typeof lista==="object") pares = Object.keys(lista).map(function(k){ return [k, lista[k]]; });
+  var atual = pvOdoGobrax();
+  var leituras = {};
+  Object.keys(atual.leituras||{}).forEach(function(k){ leituras[k] = atual.leituras[k]; });
+  var n = 0;
+  pares.forEach(function(par){
+    if(!par) return;
+    var k = mkPlacaKey(par[0]);
+    var km = pvNum(par[1]);
+    if(!k || km<=0 || km>PV_KM_MAX) return;
+    leituras[k] = {placa:String(par[0]).toUpperCase().replace(/[\s\-\.]/g,""), km:km, data:dia};
+    n++;
+  });
+  if(!n) return 0;
+  var reg = {id:PV_GOBRAX_ID, nome:"Odometro Gobrax (registro do sistema)", deleted:true, ativo:false,
+             km:0, dias:0, avisar:0, aplica:"sistema", data:dia, leituras:leituras, updatedAt:Date.now()};
+  var achou = false;
+  planoManut = (planoManut||[]).map(function(i){ if(i && i.id===PV_GOBRAX_ID){ achou=true; return reg; } return i; });
+  if(!achou) planoManut.push(reg);
+  salvarPV();
+  return n;
+}
+// Le o texto copiado da tabela "Compilado de veiculos" do Gobrax (ou linhas "PLACA;KM")
+function pvLerTextoGobrax(texto){
+  var linhas = String(texto||"").split(/\r?\n/).filter(function(l){ return l.trim(); });
+  if(!linhas.length) return [];
+  var pares = [];
+  var cab = linhas[0].split("\t").map(function(c){ return c.trim().toLowerCase(); });
+  var iP = -1, iO = -1;
+  cab.forEach(function(c, i){
+    if(iP<0 && c==="placa") iP = i;
+    if(iO<0 && c.indexOf("od")===0 && c.indexOf("metro")>0) iO = i;
+  });
+  if(iP>=0 && iO>=0){
+    linhas.slice(1).forEach(function(l){
+      var c = l.split("\t");
+      var km = String(c[iO]||"").replace(/km/i,"").trim();
+      if(/^\d+\.\d{1,2}$/.test(km)) km = km.split(".")[0];   // 238994.25 -> 238994
+      pares.push([String(c[iP]||"").trim(), km]);
+    });
+    return pares;
+  }
+  linhas.forEach(function(l){
+    var mP = l.toUpperCase().match(/\b([A-Z]{3}[\s\-]?\d[A-Z0-9]\d{2})\b/);
+    if(!mP) return;
+    var resto = l.toUpperCase().replace(mP[0], " ");
+    var mK = resto.match(/(\d[\d\.,]*)\s*(KM)?/);
+    if(!mK) return;
+    var km = mK[1];
+    if(/^\d+\.\d{1,2}$/.test(km)) km = km.split(".")[0];
+    pares.push([mP[1].replace(/[\s\-]/g,""), km]);
+  });
+  return pares;
+}
+function openPVGobrax(){
+  var gb = pvOdoGobrax();
+  var qtd = Object.keys(gb.leituras||{}).length;
+  openModal("KM do Gobrax",
+    '<div style="font-size:12.5px;color:var(--m2);line-height:1.6;margin-bottom:12px">'
+    +'No Gobrax: <b>Performance &rarr; Compilado de veiculos</b>, coloque <b>Toda minha frota</b>, mostre todas as linhas, '
+    +'selecione a tabela, copie (Ctrl+C) e cole aqui. Tambem aceita uma linha por placa: <code>PLACA;KM</code>.<br>'
+    +'O KM do Gobrax passa a valer no lugar do abastecimento.'
+    +(qtd?('<br><b>Ultima atualizacao:</b> '+pvDataBR(gb.data)+' &bull; '+qtd+' placa(s)'):'<br><b>Ainda nao ha KM do Gobrax.</b>')
+    +'</div>'
+    +'<textarea id="pvg-texto" class="form-input" style="width:100%;height:180px;font-family:monospace;font-size:12px" placeholder="Cole aqui"></textarea>'
+    +'<div id="pvg-msg" style="font-size:12px;color:var(--mu);margin:8px 0 12px"></div>'
+    +'<div style="display:flex;justify-content:flex-end;gap:10px">'
+    +'<button class="btn btn-g" onclick="closeModal()">Cancelar</button>'
+    +'<button class="btn btn-p" onclick="salvarPVGobrax()">Salvar KM</button></div>', true);
+}
+function salvarPVGobrax(){
+  var msg = ge("pvg-msg");
+  try {
+    var pares = pvLerTextoGobrax(gv("pvg-texto"));
+    if(!pares.length){
+      if(msg){ msg.style.color="var(--red)"; msg.textContent="Nao achei nenhuma placa com KM no texto colado."; }
+      return;
+    }
+    var n = pvSalvarOdoGobrax(pares, pvHoje());
+    if(!n){
+      if(msg){ msg.style.color="var(--red)"; msg.textContent="As placas vieram sem KM valido (zero ou acima de 2.000.000)."; }
+      return;
+    }
+    closeModal();
+    renderPV();
+    showToast(n+" placa(s) com KM atualizado pelo Gobrax!");
+  } catch(e){
+    if(msg){ msg.style.color="var(--red)"; msg.textContent="Erro ao salvar: "+String(e.message||e); }
+    try{ console.error("[PV] salvar Gobrax:", e); }catch(_){}
+  }
 }
 // extrai o odometro do abastecimento e guarda no cache
 function pvLerOdoCombustivel(lista){
@@ -8795,7 +8915,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 90 - MANUTENCAO PREVENTIVA (INDEXEDDB)</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 91 - KM DO GOBRAX NA PREVENTIVA (INDEXEDDB)</div>
   </div>
 </div>
 </body></html>
