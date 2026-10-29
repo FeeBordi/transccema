@@ -8362,10 +8362,10 @@ var DEFAULT_USERS = [
   {id:"u1",name:"Administrador",username:"admin",passwordHash:"8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918",role:"admin",modules:["all"],active:true,createdAt:"2026-05-28"},
   {id:"u2",name:"FELIPE",username:"felipe",passwordHash:"2bd2d3a31934d76198acc030caca4c31965474fe5fa48f35fef79d0fd74ee1b2",role:"admin",modules:["all"],active:true,createdAt:"2026-05-28"},
   {id:"u3",name:"KELLY",username:"kelly",passwordHash:"4ca6f6d5a544bf57c323657ad33aae1a019c775518cf4414beedb86962aea7c1",role:"admin",modules:["all"],active:true,createdAt:"2026-05-28"},
-  {id:"u4",name:"JOAO",username:"joao",passwordHash:"ed2befb11499489e2570cb053f774b8ed93e89eddab3f78867a2a5f32c58845e",role:"custom",modules:["orders","quotes","suppliers","almox","os"],active:true,createdAt:"2026-05-28"},
+  {id:"u4",name:"JOAO",username:"joao",passwordHash:"ed2befb11499489e2570cb053f774b8ed93e89eddab3f78867a2a5f32c58845e",role:"custom",modules:["orders","quotes","suppliers","almox","os","pv"],active:true,createdAt:"2026-05-28"},
   {id:"u5",name:"MAURICIO",username:"mauricio",passwordHash:"4f22df54942898f169802bbfe34d6d5b1455cdeb50b387bd5b6a3a6a2496cef7",role:"custom",modules:["expenses"],active:true,createdAt:"2026-05-28"},
   {id:"u6",name:"ALAN",username:"alan",passwordHash:"7315906c3c988bce3175eb40b4b0b7d17f27d4b813d16c9b5aa415bc0d2e0734",role:"custom",modules:["orders"],readonly:true,active:true,createdAt:"2026-06-03"},
-  {id:"u7",name:"ANDERSON",username:"anderson",passwordHash:"c1d35cc3471fe509203d65b3e7a53fc82337ac9ae2c797b836621f706fe37df8",role:"custom",modules:["orders","quotes","suppliers","almox","os","mk"],active:true,createdAt:"2026-09-23"}
+  {id:"u7",name:"ANDERSON",username:"anderson",passwordHash:"c1d35cc3471fe509203d65b3e7a53fc82337ac9ae2c797b836621f706fe37df8",role:"custom",modules:["orders","quotes","suppliers","almox","os","mk","pv"],active:true,createdAt:"2026-09-23"}
 ];
 // Hash padrao: "admin" com SHA-256 simples (senha: admin)
 
@@ -8384,6 +8384,20 @@ DEFAULT_USERS.forEach(function(du) {
   var exists = tcUsers.some(function(u){ return u.id === du.id; });
   if (!exists) tcUsers.push(du);
 });
+// v92: libera a tela Preventiva para Joao e Anderson uma unica vez (sem mexer em senha nem nas outras telas)
+try {
+  if (TCStore.getItem("tc_mig_pv_joao_anderson") !== "1") {
+    tcUsers.forEach(function(u){
+      if (!u) return;
+      var login = String(u.username||"").toLowerCase();
+      if ((u.id==="u4" || u.id==="u7" || login==="joao" || login==="anderson") && Array.isArray(u.modules)
+          && u.modules.indexOf("all")<0 && u.modules.indexOf("pv")<0) {
+        u.modules.push("pv");
+      }
+    });
+    TCStore.setItem("tc_mig_pv_joao_anderson", "1");
+  }
+} catch(e) { try{ console.error("[TRANSCCEMA] migracao permissao preventiva:", e); }catch(_){} }
 TCStore.setItem(USERS_KEY, JSON.stringify(tcUsers));
 var currentUser = null;
 
@@ -8393,6 +8407,11 @@ function carregarSessao() {
     var s = sessionStorage.getItem(SESSION_KEY);
     if (s) {
       currentUser = JSON.parse(s);
+      // pega as permissoes atuais do cadastro (a sessao pode ter sido salva antes de uma mudanca)
+      try {
+        var atual = (tcUsers||[]).filter(function(u){ return u && currentUser && u.id===currentUser.id; })[0];
+        if (atual) { currentUser.modules = (atual.modules||[]).slice(); currentUser.role = atual.role; currentUser.readonly = atual.readonly; }
+      } catch(e2) {}
       return true;
     }
   } catch(e) {}
@@ -8915,7 +8934,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 91 - KM DO GOBRAX NA PREVENTIVA (INDEXEDDB)</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 92 - PREVENTIVA LIBERADA PARA JOAO E ANDERSON (INDEXEDDB)</div>
   </div>
 </div>
 </body></html>
