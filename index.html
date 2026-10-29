@@ -30,6 +30,18 @@ a{text-decoration:none;color:inherit}button{font-family:inherit}
 .mk-stat .lb{color:var(--m2);font-size:11px;line-height:1.2}
 .mk-stat .vl{font-size:24px;font-weight:800;line-height:1.1}
 .mk-card .act{margin-top:8px;display:flex;flex-direction:column;gap:5px}
+.pv-al{background:var(--card);border:1px solid var(--b1);border-left:4px solid;border-radius:9px;padding:11px 13px;
+margin-bottom:8px;display:grid;grid-template-columns:104px 1fr 170px 158px;gap:12px;align-items:center}
+.pv-al .pl{font-weight:800;font-size:14px;letter-spacing:.04em}
+.pv-al .sub{color:var(--m2);font-size:11px;margin-top:2px}
+.pv-al .it{font-size:13px;font-weight:600}
+.pv-km{text-align:right}
+.pv-km .big{font-size:16px;font-weight:800;line-height:1.15}
+.pv-km .cap{font-size:10.5px;color:var(--mu);margin-top:2px}
+.pv-bar{height:5px;border-radius:3px;background:var(--s2);overflow:hidden;margin-top:6px}
+.pv-bar i{display:block;height:100%}
+.pv-acts{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
+@media(max-width:900px){.pv-al{grid-template-columns:1fr}.pv-km{text-align:left}.pv-acts{justify-content:flex-start}}
 .mk-selo{display:flex;justify-content:space-between;align-items:center;gap:6px;background:var(--s2);
 border:1px solid transparent;border-radius:6px;padding:5px 8px;margin-bottom:5px;cursor:pointer}
 .mk-selo:hover{border-color:var(--b2)}
@@ -532,6 +544,31 @@ tr:hover td{background:var(--s2)}tr:last-child td{border:none}
         <div class="mk-side card" id="mk-side"></div>
       </div>
     </div>
+    <div id="sec-pv" class="section">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <select id="pv-f-item" class="form-select" style="width:auto;padding:8px 12px;font-size:12px" onchange="renderPV()"></select>
+          <select id="pv-f-st" class="form-select" style="width:auto;padding:8px 12px;font-size:12px" onchange="renderPV()">
+            <option value="alerta">Vencidos e proximos</option>
+            <option value="vencido">So vencidos</option>
+            <option value="semreg">Sem registro de troca</option>
+            <option value="tudo">Tudo</option>
+          </select>
+          <select id="pv-f-veic" class="form-select" style="width:auto;padding:8px 12px;font-size:12px" onchange="renderPV()">
+            <option value="">Cavalos e carretas</option><option value="cavalo">So cavalos</option><option value="carreta">So carretas</option>
+          </select>
+          <input id="pv-f-busca" class="form-input" placeholder="buscar placa..." style="width:150px;padding:8px 12px;font-size:12px" oninput="renderPV()">
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-g" onclick="printPV()">&#128424; Imprimir</button>
+          <button class="btn btn-g" onclick="openPVRegistrar()">&#10003; Registrar troca</button>
+          <button class="btn btn-g" onclick="openPVPlano()">&#9881; Plano de manutencao</button>
+          <button class="btn btn-p" onclick="pvAtualizarKM()">&#8635; Atualizar KM</button>
+        </div>
+      </div>
+      <div class="mk-stats" id="pv-counters"></div>
+      <div id="pv-lista"></div>
+    </div>
     <div id="sec-abast" class="section"><iframe id="abast-frame" data-src="https://feebordi.github.io/abastecimentotransccema/" style="width:100%;height:calc(100vh - 105px);border:none;border-radius:10px;background:#fff" title="Abastecimentos"></iframe></div>
     <div id="sec-settings" class="section">
       <div class="card" style="margin-bottom:16px">
@@ -639,6 +676,18 @@ a{text-decoration:none;color:inherit}button{font-family:inherit}
 .mk-stat .lb{color:var(--m2);font-size:11px;line-height:1.2}
 .mk-stat .vl{font-size:24px;font-weight:800;line-height:1.1}
 .mk-card .act{margin-top:8px;display:flex;flex-direction:column;gap:5px}
+.pv-al{background:var(--card);border:1px solid var(--b1);border-left:4px solid;border-radius:9px;padding:11px 13px;
+margin-bottom:8px;display:grid;grid-template-columns:104px 1fr 170px 158px;gap:12px;align-items:center}
+.pv-al .pl{font-weight:800;font-size:14px;letter-spacing:.04em}
+.pv-al .sub{color:var(--m2);font-size:11px;margin-top:2px}
+.pv-al .it{font-size:13px;font-weight:600}
+.pv-km{text-align:right}
+.pv-km .big{font-size:16px;font-weight:800;line-height:1.15}
+.pv-km .cap{font-size:10.5px;color:var(--mu);margin-top:2px}
+.pv-bar{height:5px;border-radius:3px;background:var(--s2);overflow:hidden;margin-top:6px}
+.pv-bar i{display:block;height:100%}
+.pv-acts{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
+@media(max-width:900px){.pv-al{grid-template-columns:1fr}.pv-km{text-align:left}.pv-acts{justify-content:flex-start}}
 .mk-selo{display:flex;justify-content:space-between;align-items:center;gap:6px;background:var(--s2);
 border:1px solid transparent;border-radius:6px;padding:5px 8px;margin-bottom:5px;cursor:pointer}
 .mk-selo:hover{border-color:var(--b2)}
@@ -1552,7 +1601,8 @@ var PAGE_TITLES = {
   suppliers:"Fornecedores",
   expenses:"Controle de Despesas",
   abast:"Abastecimentos",
-  mk:"Manutencao da Frota"
+  mk:"Manutencao da Frota",
+  pv:"Manutencao Preventiva"
 };
 
 // ============================================================
@@ -1739,6 +1789,8 @@ function saveAll() {
     lsSet("tc_os_data",   JSON.stringify(osData));
     lsSet("tc_frota",     JSON.stringify(frota));
     lsSet("tc_manut_kb",  JSON.stringify(manutKanban));
+    lsSet("tc_plano_manut", JSON.stringify(planoManut));
+    lsSet("tc_exec_manut",  JSON.stringify(execManut));
   } catch(e) { try{ console.error("[TRANSCCEMA] saveAll local:", e); }catch(_){} }
   // Push automatico com debounce de 4s
   if (syncUrl) {
@@ -1907,6 +1959,7 @@ function buildMenu() {
     {k:"almox",     icon:"&#128201;",  label:"Almoxarifado", bid:"balm"},
     {k:"os",        icon:"&#128295;",  label:"Ordens de Servico", bid:"bos"},
     {k:"mk",        icon:"&#128736;",  label:"Manutencao Frota"},
+    {k:"pv",        icon:"&#9201;",    label:"Preventiva"},
     {k:"abast",     icon:"&#9981;",    label:"Abastecimentos"},
     {k:"settings",  icon:"&#9881;",    label:"Sync / Config"}
   ];
@@ -2047,6 +2100,595 @@ function showSeqStep() {}
 function seqNextStep() {}
 function closeSeqModal() { ge("seq-modal").style.display = "none"; }
 
+
+// ============================================================
+// MANUTENCAO PREVENTIVA POR KM - motor
+// Plano de itens (a cada X km ou X dias), registro das trocas feitas,
+// odometro vindo do abastecimento / OS / manutencao, e o calculo do alerta.
+// ============================================================
+var PV_PADRAO = [
+  {id:"pv_oleo",   nome:"Oleo de motor 15W40 + filtro de oleo", km:25000,  dias:180, avisar:2000, aplica:"cavalo",  ativo:true},
+  {id:"pv_diesel", nome:"Filtro de diesel + filtro racor",      km:25000,  dias:0,   avisar:2000, aplica:"cavalo",  ativo:true},
+  {id:"pv_ar",     nome:"Filtro de ar",                          km:50000,  dias:0,   avisar:3000, aplica:"cavalo",  ativo:true},
+  {id:"pv_cambio", nome:"Oleo de cambio 80W90",                  km:120000, dias:0,   avisar:5000, aplica:"cavalo",  ativo:true},
+  {id:"pv_carret", nome:"Lubrificacao e revisao de freio",       km:0,      dias:90,  avisar:10,   aplica:"carreta", ativo:true}
+];
+var planoManut = [];
+try { planoManut = JSON.parse(TCStore.getItem("tc_plano_manut")||"[]"); } catch(e){ planoManut=[]; }
+if (!planoManut.length) planoManut = JSON.parse(JSON.stringify(PV_PADRAO));
+var execManut = [];
+try { execManut = JSON.parse(TCStore.getItem("tc_exec_manut")||"[]"); } catch(e){ execManut=[]; }
+
+var odoCache = {};
+try { odoCache = JSON.parse(TCStore.getItem("tc_odo_cache")||"{}") || {}; } catch(e){ odoCache={}; }
+
+function salvarPV(){
+  try { TCStore.setItem("tc_plano_manut", JSON.stringify(planoManut)); } catch(e){}
+  try { TCStore.setItem("tc_exec_manut", JSON.stringify(execManut)); } catch(e){}
+  saveAll();
+}
+function pvAtivos(){ return (planoManut||[]).filter(function(i){ return i && !i.deleted && i.ativo!==false; }); }
+function pvItem(id){ for(var i=0;i<(planoManut||[]).length;i++){ if(planoManut[i] && planoManut[i].id===id) return planoManut[i]; } return null; }
+// Le numero tolerando o formato brasileiro: "593.582,52" vira 593582, nao 59358252.
+function pvNum(v){
+  if(typeof v==="number") return isFinite(v)?Math.round(v):0;
+  var t=String(v==null?"":v).trim().replace(/\s/g,"");
+  if(!t) return 0;
+  t=t.replace(/[.,]\d{1,2}$/,"");   // joga fora os centavos, se houver
+  t=t.replace(/[^0-9-]/g,"");        // o que sobrou de ponto e virgula era separador de milhar
+  var n=parseInt(t,10);
+  return isNaN(n)?0:n;
+}
+// Nenhum caminhao da frota passa disso. Leitura acima e erro de digitacao e e ignorada.
+var PV_KM_MAX = 2000000;
+function pvHoje(){ var d=new Date(); return d.getFullYear()+"-"+("0"+(d.getMonth()+1)).slice(-2)+"-"+("0"+d.getDate()).slice(-2); }
+function pvDias(a,b){
+  if(!a||!b) return null;
+  var x=new Date(String(a).slice(0,10)+"T12:00:00"), y=new Date(String(b).slice(0,10)+"T12:00:00");
+  if(isNaN(x)||isNaN(y)) return null;
+  return Math.round((y-x)/86400000);
+}
+function pvMaisDias(data, n){
+  var d=new Date(String(data).slice(0,10)+"T12:00:00");
+  if(isNaN(d)) return "";
+  d.setDate(d.getDate()+(n||0));
+  return d.getFullYear()+"-"+("0"+(d.getMonth()+1)).slice(-2)+"-"+("0"+d.getDate()).slice(-2);
+}
+function pvDataBR(v){
+  if(!v) return "--";
+  var p=String(v).slice(0,10).split("-");
+  return p.length===3 ? (p[2]+"/"+p[1]+"/"+p[0]) : String(v);
+}
+function pvMil(n){ return Number(n||0).toLocaleString("pt-BR"); }
+
+// ---------- ODOMETRO: junta as fontes e fica com a leitura mais alta ----------
+function pvGuardaOdo(mapa, placa, km, data, fonte){
+  var k = mkPlacaKey(placa);
+  if(!k) return;
+  km = pvNum(km);
+  if(km<=0 || km>PV_KM_MAX) return;   // ignora leitura impossivel
+  var at = mapa[k];
+  if(!at || km > at.km) mapa[k] = {placa:String(placa).toUpperCase(), km:km, data:String(data||"").slice(0,10), fonte:fonte};
+}
+function odoPorPlaca(){
+  var m = {};
+  // 1) abastecimento (cache preenchido por carregarCombustivel)
+  try {
+    Object.keys(odoCache||{}).forEach(function(k){
+      var o=odoCache[k]; if(o) pvGuardaOdo(m, o.placa||k, o.km, o.data, "Abastecimento");
+    });
+  } catch(e){}
+  // 2) ordens de servico
+  try {
+    (osData||[]).forEach(function(o){
+      if(!o || o.deleted) return;
+      pvGuardaOdo(m, o.pl, o.ho, o.df||o.de, "Ordem de Servico");
+    });
+  } catch(e){}
+  // 3) cartoes de manutencao (cavalo e carreta)
+  try {
+    (typeof mkAtivos==="function" ? mkAtivos() : []).forEach(function(c){
+      (typeof mkAlvosAtivos==="function" ? mkAlvosAtivos(c) : ["cav"]).forEach(function(a){
+        var r=mkAlvo(c,a);
+        pvGuardaOdo(m, mkPlacaAlvo(c,a), r.km, (r.fim||r.inicio||"").slice(0,10), "Manutencao");
+      });
+    });
+  } catch(e){}
+  return m;
+}
+// extrai o odometro do abastecimento e guarda no cache
+function pvLerOdoCombustivel(lista){
+  var novo = {};
+  (lista||[]).forEach(function(d){
+    if(!d) return;
+    var pl = d.placa || d.PLACA || "";
+    var km = d.km_odo != null ? d.km_odo : (d.km != null ? d.km : 0);
+    var dt = String(d.data||"").replace(/^'/,"").trim();
+    var mm = dt.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    var iso = mm ? (mm[3]+"-"+("0"+mm[2]).slice(-2)+"-"+("0"+mm[1]).slice(-2)) : "";
+    pvGuardaOdo(novo, pl, km, iso, "Abastecimento");
+  });
+  if(Object.keys(novo).length){
+    odoCache = novo;
+    try { TCStore.setItem("tc_odo_cache", JSON.stringify(odoCache)); } catch(e){}
+  }
+  return Object.keys(novo).length;
+}
+
+// ---------- ULTIMA EXECUCAO ----------
+function pvUltimaExec(placa, itemId){
+  var k=mkPlacaKey(placa), achou=null;
+  (execManut||[]).forEach(function(e){
+    if(!e || e.deleted) return;
+    if(e.itemId!==itemId) return;
+    if(mkPlacaKey(e.placa)!==k) return;
+    if(!achou || pvNum(e.km) > pvNum(achou.km) || String(e.data||"") > String(achou.data||"")) achou=e;
+  });
+  return achou;
+}
+function pvRegistrarExec(placa, itemId, data, km, origem, osNum){
+  if(!placa || !itemId) return null;
+  var e = {
+    id:"ex_"+mkPlacaKey(placa)+"_"+itemId+"_"+String(data||pvHoje()).slice(0,10),
+    placa:String(placa).toUpperCase(), itemId:itemId,
+    data:String(data||pvHoje()).slice(0,10), km:pvNum(km),
+    origem:origem||"manual", os:osNum||"", updatedAt:Date.now()
+  };
+  var i = -1;
+  for(var j=0;j<execManut.length;j++){ if(execManut[j] && execManut[j].id===e.id){ i=j; break; } }
+  if(i>=0) execManut[i]=e; else execManut.push(e);
+  return e;
+}
+
+// ---------- CALCULO DOS ALERTAS ----------
+// devolve uma linha por (placa, item) com a situacao
+function pvCalcular(){
+  var odo = odoPorPlaca();
+  var itens = pvAtivos();
+  var hoje = pvHoje();
+  var linhas = [];
+  var vistos = {};
+
+  function paraVeiculo(placa, tipo, motorista, conjunto){
+    var k = mkPlacaKey(placa);
+    if(!k || vistos[k]) return;
+    vistos[k] = 1;
+    var leitura = odo[k] || null;
+    itens.forEach(function(it){
+      if(it.aplica==="cavalo" && tipo!=="cavalo") return;
+      if(it.aplica==="carreta" && tipo!=="carreta") return;
+      var ult = pvUltimaExec(placa, it.id);
+      var L = {
+        placa:String(placa).toUpperCase(), tipo:tipo, motorista:motorista||"", conjunto:conjunto||"",
+        itemId:it.id, item:it.nome, intervaloKm:pvNum(it.km), intervaloDias:pvNum(it.dias),
+        avisar:pvNum(it.avisar),
+        kmAtual: leitura?leitura.km:0, kmData: leitura?leitura.data:"", kmFonte: leitura?leitura.fonte:"",
+        ultimaData: ult?ult.data:"", ultimoKm: ult?pvNum(ult.km):0,
+        temRegistro: !!ult, faltaKm:null, faltaDias:null, proximoKm:null, proximaData:"",
+        status:"semreg", urgencia:0
+      };
+      if(!ult){ linhas.push(L); return; }
+      if(L.intervaloKm>0){
+        L.proximoKm = L.ultimoKm + L.intervaloKm;
+        if(L.kmAtual>0) L.faltaKm = L.proximoKm - L.kmAtual;
+      }
+      if(L.intervaloDias>0){
+        L.proximaData = pvMaisDias(L.ultimaData, L.intervaloDias);
+        L.faltaDias = pvDias(hoje, L.proximaData);
+      }
+      // situacao: o que estiver pior entre km e dias
+      var st="ok", urg=0;
+      if(L.faltaKm!=null){
+        if(L.faltaKm<0){ st="vencido"; urg=Math.max(urg, 1000000 - L.faltaKm); }
+        else if(L.faltaKm<=L.avisar){ st=(st==="vencido")?st:"proximo"; urg=Math.max(urg, 500000 - L.faltaKm); }
+      }
+      if(L.faltaDias!=null){
+        var avisoD = L.intervaloKm>0 ? 10 : (L.avisar||10);
+        if(L.faltaDias<0){ st="vencido"; urg=Math.max(urg, 1000000 + (-L.faltaDias)*100); }
+        else if(L.faltaDias<=avisoD && st!=="vencido"){ st="proximo"; urg=Math.max(urg, 500000 - L.faltaDias*100); }
+      }
+      if(L.faltaKm==null && L.faltaDias==null) st="semkm";
+      L.status=st; L.urgencia=urg;
+      linhas.push(L);
+    });
+  }
+
+  (frota||[]).forEach(function(f){
+    if(!f) return;
+    if(f.cavalo)  paraVeiculo(f.cavalo,  "cavalo",  f.motorista, f.carreta||"");
+    if(f.carreta) paraVeiculo(f.carreta, "carreta", f.motorista, f.cavalo||"");
+  });
+
+  linhas.sort(function(a,b){
+    if(b.urgencia!==a.urgencia) return b.urgencia-a.urgencia;
+    return String(a.placa).localeCompare(String(b.placa));
+  });
+  return linhas;
+}
+function pvResumo(linhas){
+  var r={vencido:0, proximo:0, ok:0, semreg:0, semkm:0};
+  (linhas||[]).forEach(function(L){ if(r[L.status]!=null) r[L.status]++; });
+  return r;
+}
+
+
+// ============================================================
+// MANUTENCAO PREVENTIVA - tela de alertas
+// ============================================================
+var PV_COR = {vencido:"#f87171", proximo:"#fbbf24", ok:"#4ade80", semreg:"#60a5fa", semkm:"#94a3b8"};
+var PV_LB  = {vencido:"Vencido", proximo:"Proximo", ok:"Em dia", semreg:"Sem registro", semkm:"Sem KM"};
+
+function renderPV(){
+  var host = ge("pv-lista"); if(!host) return;
+  // OS de preventiva ja concluida vira registro de troca automaticamente
+  try { if(pvVarrerOSConcluidas()>0) salvarPV(); } catch(e){}
+  // se nunca buscou o odometro nesta maquina, busca uma vez
+  try {
+    if(!window._pvBuscouKM && !Object.keys(odoCache||{}).length){
+      window._pvBuscouKM = true;
+      fetch(FUEL_URL+"?json=1", {redirect:"follow"})
+        .then(function(r){ return r.json(); })
+        .then(function(l){ if(pvLerOdoCombustivel(l)) renderPV(); })
+        .catch(function(){});
+    }
+  } catch(e){}
+  var linhas;
+  try { linhas = pvCalcular(); }
+  catch(e){ host.innerHTML = '<div class="card" style="color:var(--red)">Nao consegui calcular os alertas: '+esc(String(e))+'</div>'; return; }
+
+  // filtro de itens
+  var selIt = ge("pv-f-item");
+  if(selIt){
+    var atual = selIt.value || "";
+    selIt.innerHTML = '<option value="">Todos os itens</option>'
+      + pvAtivos().map(function(i){ return '<option value="'+esc(i.id)+'"'+(atual===i.id?" selected":"")+'>'+esc(i.nome)+'</option>'; }).join("");
+  }
+  var fIt = gv("pv-f-item")||"", fSt = gv("pv-f-st")||"alerta",
+      fVe = gv("pv-f-veic")||"", fBu = (gv("pv-f-busca")||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
+
+  var resumo = pvResumo(linhas);
+  var ctr = ge("pv-counters");
+  if(ctr){
+    var odo = odoPorPlaca();
+    var comKm = Object.keys(odo).length;
+    var maisNova = "";
+    Object.keys(odo).forEach(function(k){ if(odo[k].data > maisNova) maisNova = odo[k].data; });
+    ctr.innerHTML =
+      '<div class="mk-stat"><div class="ic" style="background:rgba(239,68,68,.12)">&#128308;</div><div>'
+      +'<div class="lb">Vencidos</div><div class="vl" style="color:'+PV_COR.vencido+'">'+resumo.vencido+'</div></div></div>'
+      +'<div class="mk-stat"><div class="ic" style="background:rgba(245,158,11,.12)">&#128993;</div><div>'
+      +'<div class="lb">Vencem em breve</div><div class="vl" style="color:'+PV_COR.proximo+'">'+resumo.proximo+'</div></div></div>'
+      +'<div class="mk-stat"><div class="ic" style="background:rgba(34,197,94,.12)">&#128994;</div><div>'
+      +'<div class="lb">Em dia</div><div class="vl" style="color:'+PV_COR.ok+'">'+resumo.ok+'</div></div></div>'
+      +'<div class="mk-stat"><div class="ic" style="background:rgba(77,150,255,.12)">&#128663;</div><div>'
+      +'<div class="lb">Placas com KM</div><div class="vl" style="color:#60a5fa">'+comKm+'</div>'
+      +'<div style="font-size:10px;color:var(--mu)">'+(maisNova?("mais recente "+pvDataBR(maisNova)):"sem leitura")+'</div></div></div>';
+  }
+
+  var vis = linhas.filter(function(L){
+    if(fIt && L.itemId!==fIt) return false;
+    if(fVe && L.tipo!==fVe) return false;
+    if(fBu && mkPlacaKey(L.placa).indexOf(fBu)<0) return false;
+    if(fSt==="alerta")  return L.status==="vencido" || L.status==="proximo";
+    if(fSt==="vencido") return L.status==="vencido";
+    if(fSt==="semreg")  return L.status==="semreg";
+    return true;
+  });
+
+  if(!vis.length){
+    host.innerHTML = '<div class="card" style="text-align:center;padding:30px 16px">'
+      +'<div style="font-size:15px;color:var(--grn);font-weight:700;margin-bottom:6px">&#10003; Nada pendente neste filtro</div>'
+      +'<div style="color:var(--m2);font-size:12.5px">'+linhas.length+' combinacao(oes) de placa e item no plano.</div></div>';
+    return;
+  }
+
+  var MAX = 200;
+  var html = vis.slice(0, MAX).map(function(L){
+    var cor = PV_COR[L.status] || "#94a3b8";
+    var pct = 0;
+    if(L.faltaKm!=null && L.intervaloKm>0){
+      pct = Math.max(0, Math.min(100, Math.round((1 - (L.faltaKm/L.intervaloKm))*100)));
+    } else if(L.faltaDias!=null && L.intervaloDias>0){
+      pct = Math.max(0, Math.min(100, Math.round((1 - (L.faltaDias/L.intervaloDias))*100)));
+    }
+    var grande, legenda;
+    if(L.status==="semreg"){
+      grande = "sem registro";
+      legenda = "nunca foi lancada a troca deste item";
+    } else if(L.faltaKm!=null && L.faltaKm<0){
+      grande = pvMil(-L.faltaKm)+" km vencido";
+      legenda = "atual "+pvMil(L.kmAtual)+" &middot; devia "+pvMil(L.proximoKm);
+    } else if(L.faltaDias!=null && L.faltaDias<0){
+      grande = (-L.faltaDias)+" dia(s) vencido";
+      legenda = "vencia em "+pvDataBR(L.proximaData);
+    } else if(L.faltaKm!=null){
+      grande = "faltam "+pvMil(L.faltaKm)+" km";
+      legenda = "atual "+pvMil(L.kmAtual)+" &middot; vence "+pvMil(L.proximoKm);
+    } else if(L.faltaDias!=null){
+      grande = "faltam "+L.faltaDias+" dia(s)";
+      legenda = "vence em "+pvDataBR(L.proximaData);
+    } else {
+      grande = "sem KM";
+      legenda = "nenhuma leitura de odometro para esta placa";
+    }
+    var ult = L.temRegistro
+      ? ("ultima troca "+pvDataBR(L.ultimaData)+(L.ultimoKm?(" com "+pvMil(L.ultimoKm)+" km"):"")
+         +" &middot; a cada "+(L.intervaloKm?(pvMil(L.intervaloKm)+" km"):"")+(L.intervaloKm&&L.intervaloDias?" ou ":"")+(L.intervaloDias?(L.intervaloDias+" dias"):""))
+      : ("a cada "+(L.intervaloKm?(pvMil(L.intervaloKm)+" km"):"")+(L.intervaloKm&&L.intervaloDias?" ou ":"")+(L.intervaloDias?(L.intervaloDias+" dias"):""));
+    var tag = L.tipo==="carreta"
+      ? '<span class="tv tv-car">CARRETA</span>' : '<span class="tv tv-cav">CAVALO</span>';
+    return '<div class="pv-al" style="border-left-color:'+cor+'">'
+      +'<div><div class="pl">'+esc(L.placa)+'</div><div class="sub">'+tag+(L.motorista?(" "+esc(L.motorista.split(" ")[0])):"")+'</div></div>'
+      +'<div><div class="it">'+esc(L.item)+'</div><div class="sub">'+ult+'</div>'
+      +'<div class="pv-bar"><i style="width:'+pct+'%;background:'+cor+'"></i></div></div>'
+      +'<div class="pv-km"><div class="big" style="color:'+cor+'">'+grande+'</div><div class="cap">'+legenda
+      +(L.kmFonte?('<br>KM por '+esc(L.kmFonte)+(L.kmData?(" em "+pvDataBR(L.kmData)):"")):"")+'</div></div>'
+      +'<div class="pv-acts">'
+      +'<button class="btn btn-g btn-sm" onclick="openPVRegistrar(\''+esc(L.placa)+'\',\''+esc(L.itemId)+'\')">Registrar</button>'
+      +'<button class="btn btn-p btn-sm" onclick="pvGerarOS(\''+esc(L.placa)+'\',\''+esc(L.itemId)+'\')">Gerar OS</button>'
+      +'</div></div>';
+  }).join("");
+  if(vis.length>MAX) html += '<div style="text-align:center;color:var(--mu);font-size:12px;padding:12px">mostrando os '+MAX+' mais urgentes de '+vis.length+'</div>';
+  host.innerHTML = html;
+}
+
+// ---------- atualizar KM ----------
+function pvAtualizarKM(){
+  showToast("Buscando o odometro no abastecimento...");
+  fetch(FUEL_URL+"?json=1", {redirect:"follow"})
+    .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
+    .then(function(lista){
+      var n = pvLerOdoCombustivel(lista);
+      if(!n){ showToast("O abastecimento respondeu sem placas com odometro",true); return; }
+      renderPV();
+      showToast(n+" placa(s) com KM atualizado pelo abastecimento!");
+    })
+    .catch(function(e){
+      showToast("Nao consegui buscar agora: "+String(e.message||e),true);
+      setTimeout(function(){
+        alert("O KM nao foi atualizado pelo abastecimento.\n\nMotivo: "+String(e.message||e)
+          +"\n\nOs alertas continuam valendo com a ultima leitura conhecida, e com o KM das OS e das manutencoes.");
+      },300);
+    });
+}
+
+// ---------- registrar troca feita ----------
+function openPVRegistrar(placa, itemId){
+  var itens = pvAtivos();
+  if(!itens.length){ showToast("Cadastre um item no plano primeiro",true); return; }
+  var placas = [];
+  (frota||[]).forEach(function(f){
+    if(!f) return;
+    if(f.cavalo && placas.indexOf(f.cavalo)<0) placas.push(f.cavalo);
+    if(f.carreta && placas.indexOf(f.carreta)<0) placas.push(f.carreta);
+  });
+  placas.sort();
+  if(placa && placas.indexOf(placa)<0) placas.unshift(placa);
+  var kmSug = 0;
+  if(placa){ var o=odoPorPlaca()[mkPlacaKey(placa)]; kmSug = o?o.km:0; }
+  openModal("Registrar troca feita",
+    '<div style="font-size:12.5px;color:var(--m2);line-height:1.6;margin-bottom:12px">'
+    +'Use quando a troca foi feita sem passar por uma OS. A proxima e reprogramada sozinha a partir do KM informado.</div>'
+    +'<div class="form-row" style="margin-bottom:12px">'
+    +'<div class="form-group"><label class="form-label">Placa <span class="form-req">*</span></label>'
+    +'<select id="pvr-placa" class="form-select" onchange="pvrAtualizaKm()">'
+    + placas.map(function(p){ return '<option'+((placa===p)?" selected":"")+'>'+esc(p)+'</option>'; }).join("")+'</select></div>'
+    +'<div class="form-group"><label class="form-label">Item <span class="form-req">*</span></label>'
+    +'<select id="pvr-item" class="form-select">'
+    + itens.map(function(i){ return '<option value="'+esc(i.id)+'"'+((itemId===i.id)?" selected":"")+'>'+esc(i.nome)+'</option>'; }).join("")+'</select></div></div>'
+    +'<div class="form-row" style="margin-bottom:14px">'
+    +'<div class="form-group"><label class="form-label">Data da troca</label><input id="pvr-data" type="date" class="form-input" value="'+pvHoje()+'"></div>'
+    +'<div class="form-group"><label class="form-label">KM na troca</label><input id="pvr-km" type="number" class="form-input" value="'+(kmSug||"")+'">'
+    +'<div id="pvr-hint" style="font-size:11px;color:var(--mu);margin-top:3px"></div></div></div>'
+    +'<div style="display:flex;justify-content:flex-end;gap:10px">'
+    +'<button class="btn btn-g" onclick="closeModal()">Cancelar</button>'
+    +'<button class="btn btn-p" onclick="salvarPVRegistro()">Registrar</button></div>', true);
+  pvrAtualizaKm();
+}
+function pvrAtualizaKm(){
+  var p = gv("pvr-placa"), h = ge("pvr-hint"), c = ge("pvr-km");
+  if(!p) return;
+  var o = odoPorPlaca()[mkPlacaKey(p)];
+  if(h) h.innerHTML = o ? ("ultimo KM conhecido: "+pvMil(o.km)+" ("+esc(o.fonte)+")") : "nenhuma leitura de KM para esta placa";
+  if(c && o && (!c.value || c.value==="0")) c.value = o.km;
+}
+function salvarPVRegistro(){
+  var placa = (gv("pvr-placa")||"").trim();
+  var itemId = gv("pvr-item")||"";
+  var data = (gv("pvr-data")||"").slice(0,10) || pvHoje();
+  var km = pvNum(gv("pvr-km"));
+  if(!placa){ showToast("Escolha a placa",true); return; }
+  if(!itemId){ showToast("Escolha o item",true); return; }
+  var it = pvItem(itemId);
+  if(it && pvNum(it.km)>0 && km<=0){
+    if(!confirm("Este item e controlado por KM e voce nao informou o KM.\n\nSem o KM a proxima troca nao e calculada.\n\nRegistrar assim mesmo?")) return;
+  }
+  try {
+    pvRegistrarExec(placa, itemId, data, km, "manual", "");
+    salvarPV(); closeModal(); renderPV();
+    showToast("Troca registrada para "+placa+"!");
+  } catch(e){
+    showToast("Nao consegui registrar: "+String(e.message||e), true);
+  }
+}
+
+// ---------- gerar OS a partir do alerta ----------
+function pvGerarOS(placa, itemId){
+  var it = pvItem(itemId);
+  if(!it){ showToast("Item nao encontrado no plano",true); return; }
+  var odo = odoPorPlaca()[mkPlacaKey(placa)];
+  var km = odo?odo.km:0;
+  if(!confirm("Abrir OS de "+it.nome+" para a placa "+placa+"?")) return;
+  try {
+    var ehCarreta = false;
+    var conj = (typeof frotaPorPlaca==="function") ? frotaPorPlaca(placa) : null;
+    if(conj && mkPlacaKey(conj.carreta)===mkPlacaKey(placa)) ehCarreta = true;
+    var num = "OS-" + new Date().getFullYear() + "-" + String(Date.now()).slice(-4);
+    var novaOS = {
+      i: uid(), n: num, st: "Em Aberto", col: "entrada",
+      pl: String(placa).toUpperCase(),
+      veic: ehCarreta ? "car" : "cav",
+      plCav: conj ? (conj.cavalo||"") : (ehCarreta?"":String(placa).toUpperCase()),
+      plCar: conj ? (conj.carreta||"") : (ehCarreta?String(placa).toUpperCase():""),
+      mot: conj ? (conj.motorista||"") : "",
+      fa: "TRANSCCEMA", mo: "Interno", ca: ehCarreta?"Carreta":"Cavalo Mecanico",
+      so: "", ho: km, pr: "Normal", ti: 1,
+      classe: "Preventiva",
+      de: pvHoje(), df: "",
+      sv: [[it.nome, "Interna", "Preventiva", "Gerada pelo alerta de manutencao preventiva", 1]],
+      pecas: [], fonte: "preventiva",
+      pvItem: itemId, pvPlaca: String(placa).toUpperCase(),
+      updatedAt: Date.now()
+    };
+    osData.unshift(novaOS);
+    try { TCStore.setItem("tc_os_data", JSON.stringify(osData)); } catch(e){}
+    saveAll(); renderPV();
+    if(typeof renderOSView==="function") renderOSView();
+    showToast("OS "+num+" aberta para "+placa+". Ao concluir, a proxima troca e reprogramada sozinha.");
+  } catch(e){
+    showToast("Nao consegui abrir a OS: "+String(e.message||e), true);
+  }
+}
+
+// ---------- quando a OS da preventiva e concluida, registra a troca ----------
+function pvRegistrarDeOS(o){
+  try {
+    if(!o || !o.pvItem || !o.pvPlaca) return false;
+    if(String(o.col)!=="realizado" && String(o.st||"").toLowerCase().indexOf("realizado")<0) return false;
+    var data = (o.df||"").slice(0,10) || pvHoje();
+    var km = pvNum(o.ho);
+    pvRegistrarExec(o.pvPlaca, o.pvItem, data, km, "os", o.n||"");
+    salvarPV();
+    return true;
+  } catch(e){ return false; }
+}
+function pvVarrerOSConcluidas(){
+  var n=0;
+  (osData||[]).forEach(function(o){
+    if(!o || o.deleted || !o.pvItem) return;
+    if(String(o.col)!=="realizado") return;
+    var ja = pvUltimaExec(o.pvPlaca, o.pvItem);
+    if(ja && ja.os===o.n) return;
+    if(pvRegistrarDeOS(o)) n++;
+  });
+  return n;
+}
+
+// ---------- plano de manutencao ----------
+function openPVPlano(){
+  var linhas = (planoManut||[]).filter(function(i){ return i && !i.deleted; }).map(function(i, idx){
+    return '<tr>'
+      +'<td style="padding:6px 8px;border-top:1px solid var(--b1)"><input class="form-input" style="padding:6px 8px;font-size:12px" id="pl-n-'+idx+'" value="'+esc(i.nome||"")+'"></td>'
+      +'<td style="padding:6px 8px;border-top:1px solid var(--b1)"><input type="number" class="form-input" style="padding:6px 8px;font-size:12px;width:92px;text-align:center" id="pl-k-'+idx+'" value="'+pvNum(i.km)+'"></td>'
+      +'<td style="padding:6px 8px;border-top:1px solid var(--b1)"><input type="number" class="form-input" style="padding:6px 8px;font-size:12px;width:78px;text-align:center" id="pl-d-'+idx+'" value="'+pvNum(i.dias)+'"></td>'
+      +'<td style="padding:6px 8px;border-top:1px solid var(--b1)"><input type="number" class="form-input" style="padding:6px 8px;font-size:12px;width:82px;text-align:center" id="pl-a-'+idx+'" value="'+pvNum(i.avisar)+'"></td>'
+      +'<td style="padding:6px 8px;border-top:1px solid var(--b1)"><select class="form-select" style="padding:6px 8px;font-size:12px;width:110px" id="pl-p-'+idx+'">'
+      +['cavalo','carreta','todos'].map(function(x){ return '<option value="'+x+'"'+((i.aplica||"cavalo")===x?" selected":"")+'>'+(x==="cavalo"?"Cavalos":x==="carreta"?"Carretas":"Todos")+'</option>'; }).join("")
+      +'</select></td>'
+      +'<td style="padding:6px 8px;border-top:1px solid var(--b1);text-align:center"><input type="checkbox" id="pl-x-'+idx+'"'+(i.ativo!==false?" checked":"")+'></td>'
+      +'<td style="padding:6px 8px;border-top:1px solid var(--b1);text-align:right">'
+      +'<button class="delbtn" onclick="excluirPVItem(\''+esc(i.id)+'\')">&#128465;</button></td>'
+      +'<td style="display:none"><input id="pl-i-'+idx+'" value="'+esc(i.id)+'"></td></tr>';
+  }).join("");
+  openModal("Plano de manutencao preventiva",
+    '<div style="font-size:12.5px;color:var(--m2);line-height:1.65;margin-bottom:12px">'
+    +'Defina de quanto em quanto tempo cada item deve ser trocado. Pode ser por <b>KM</b>, por <b>dias</b>, ou os dois &mdash; '
+    +'nesse caso vence o que chegar primeiro. Deixe o campo em <b>0</b> para nao usar aquele criterio.</div>'
+    +'<div style="max-height:46vh;overflow:auto;border:1px solid var(--b1);border-radius:8px">'
+    +'<table style="width:100%;border-collapse:collapse;font-size:12px">'
+    +'<thead><tr style="background:var(--s2)">'
+    +'<th style="text-align:left;padding:8px;font-size:11px;color:var(--m2)">Item</th>'
+    +'<th style="padding:8px;font-size:11px;color:var(--m2)">A cada (km)</th>'
+    +'<th style="padding:8px;font-size:11px;color:var(--m2)">Ou (dias)</th>'
+    +'<th style="padding:8px;font-size:11px;color:var(--m2)">Avisar antes</th>'
+    +'<th style="padding:8px;font-size:11px;color:var(--m2)">Aplica a</th>'
+    +'<th style="padding:8px;font-size:11px;color:var(--m2)">Ativo</th><th></th></tr></thead>'
+    +'<tbody>'+(linhas||'<tr><td colspan="7" style="padding:16px;text-align:center;color:var(--mu)">Nenhum item no plano</td></tr>')+'</tbody></table></div>'
+    +'<div style="display:flex;justify-content:space-between;gap:10px;margin-top:14px;flex-wrap:wrap">'
+    +'<div style="display:flex;gap:8px"><button class="btn btn-g" onclick="novoPVItem()">+ Novo item</button>'
+    +'<button class="btn btn-g" onclick="restaurarPVPadrao()">Restaurar o padrao</button></div>'
+    +'<div style="display:flex;gap:10px"><button class="btn btn-g" onclick="closeModal()">Cancelar</button>'
+    +'<button class="btn btn-p" onclick="salvarPVPlano()">Salvar plano</button></div></div>', true);
+}
+function salvarPVPlano(){
+  try {
+    var vivos = (planoManut||[]).filter(function(i){ return i && !i.deleted; });
+    var erros = [];
+    vivos.forEach(function(i, idx){
+      var nome=(gv("pl-n-"+idx)||"").trim();
+      var km=pvNum(gv("pl-k-"+idx)), dias=pvNum(gv("pl-d-"+idx)), av=pvNum(gv("pl-a-"+idx));
+      if(!nome){ erros.push("Linha "+(idx+1)+": o nome do item esta em branco"); return; }
+      if(km<=0 && dias<=0){ erros.push(nome+": precisa de KM ou de dias (os dois estao zerados)"); return; }
+      if(km<0 || dias<0 || av<0){ erros.push(nome+": numero negativo"); return; }
+      i.nome=nome; i.km=km; i.dias=dias; i.avisar=av;
+      i.aplica=gv("pl-p-"+idx)||"cavalo";
+      var cx=ge("pl-x-"+idx); i.ativo = cx ? !!cx.checked : true;
+      i.updatedAt=Date.now();
+    });
+    if(erros.length){ alert("Corrija antes de salvar:\n\n- "+erros.join("\n- ")); return; }
+    salvarPV(); closeModal(); renderPV();
+    showToast("Plano salvo!");
+  } catch(e){ showToast("Nao consegui salvar o plano: "+String(e.message||e), true); }
+}
+function novoPVItem(){
+  planoManut.push({id:"pv_"+uid(), nome:"Novo item", km:25000, dias:0, avisar:2000, aplica:"cavalo", ativo:true, updatedAt:Date.now()});
+  salvarPV(); openPVPlano();
+}
+function excluirPVItem(id){
+  if(!confirm("Tirar este item do plano?\n\nO historico de trocas ja registrado continua guardado.")) return;
+  planoManut = planoManut.map(function(i){ return (i && i.id===id) ? Object.assign({}, i, {deleted:true, updatedAt:Date.now()}) : i; });
+  salvarPV(); openPVPlano(); renderPV();
+  showToast("Item removido do plano");
+}
+function restaurarPVPadrao(){
+  if(!confirm("Voltar o plano para os itens padrao?\n\nOs itens que voce criou sao desativados, mas o historico de trocas continua guardado.")) return;
+  planoManut = planoManut.map(function(i){ return (i && i.id.indexOf("pv_")===0 && PV_PADRAO.filter(function(p){return p.id===i.id;}).length===0) ? Object.assign({},i,{deleted:true,updatedAt:Date.now()}) : i; });
+  PV_PADRAO.forEach(function(p){
+    var ja = pvItem(p.id);
+    if(ja) Object.assign(ja, p, {deleted:false, updatedAt:Date.now()});
+    else planoManut.push(Object.assign({}, p, {updatedAt:Date.now()}));
+  });
+  salvarPV(); openPVPlano(); renderPV();
+  showToast("Plano padrao restaurado");
+}
+
+// ---------- impressao ----------
+function printPV(){
+  var linhas;
+  try { linhas = pvCalcular(); } catch(e){ showToast("Nao consegui montar a lista",true); return; }
+  var fSt = gv("pv-f-st")||"alerta";
+  var vis = linhas.filter(function(L){
+    if(fSt==="alerta")  return L.status==="vencido" || L.status==="proximo";
+    if(fSt==="vencido") return L.status==="vencido";
+    if(fSt==="semreg")  return L.status==="semreg";
+    return true;
+  });
+  if(!vis.length){ showToast("Nada para imprimir neste filtro",true); return; }
+  var w = window.open("","_blank");
+  if(!w){ showToast("Libere os pop-ups para imprimir",true); return; }
+  var tr = vis.map(function(L){
+    var sit = PV_LB[L.status]||L.status;
+    var falta = (L.faltaKm!=null) ? (L.faltaKm<0 ? ("VENCIDO "+pvMil(-L.faltaKm)+" km") : (pvMil(L.faltaKm)+" km"))
+              : (L.faltaDias!=null ? (L.faltaDias<0 ? ("VENCIDO "+(-L.faltaDias)+" d") : (L.faltaDias+" dias")) : "-");
+    return '<tr><td>'+esc(L.placa)+'</td><td>'+(L.tipo==="carreta"?"Carreta":"Cavalo")+'</td><td>'+esc(L.item)+'</td>'
+      +'<td style="text-align:right">'+(L.kmAtual?pvMil(L.kmAtual):"-")+'</td>'
+      +'<td style="text-align:right">'+(L.temRegistro?(pvDataBR(L.ultimaData)+(L.ultimoKm?(" / "+pvMil(L.ultimoKm)):"")):"sem registro")+'</td>'
+      +'<td style="text-align:right">'+(L.proximoKm?pvMil(L.proximoKm):(L.proximaData?pvDataBR(L.proximaData):"-"))+'</td>'
+      +'<td style="text-align:right">'+falta+'</td><td>'+sit+'</td><td style="width:90px"></td></tr>';
+  }).join("");
+  w.document.write('<html><head><meta charset="utf-8"><title>Manutencao preventiva - TRANSCCEMA</title>'
+    +'<style>body{font-family:Arial,Helvetica,sans-serif;padding:20px;color:#111}'
+    +'h1{font-size:17px;margin:0 0 4px}p{font-size:12px;color:#555;margin:0 0 12px}'
+    +'table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:6px 7px;font-size:11px;text-align:left}'
+    +'th{background:#eef2f7}</style></head><body>'
+    +'<h1>Manutencao preventiva</h1>'
+    +'<p>TRANSCCEMA &mdash; '+new Date().toLocaleString("pt-BR")+' &mdash; '+vis.length+' item(ns)</p>'
+    +'<table><thead><tr><th>Placa</th><th>Tipo</th><th>Item</th><th>KM atual</th><th>Ultima troca</th><th>Proxima</th><th>Falta</th><th>Situacao</th><th>Feito em</th></tr></thead>'
+    +'<tbody>'+tr+'</tbody></table></body></html>');
+  w.document.close();
+  setTimeout(function(){ try{ w.print(); }catch(e){} }, 400);
+}
+
 // ============================================================
 // DASHBOARD
 // ============================================================
@@ -2067,6 +2709,7 @@ function carregarCombustivel(){
         var v=Number(d.valor||0)||0;
         var nome=MONTHS[mi]; bm[nome]=(bm[nome]||0)+v; tot+=v;
       });
+      try { pvLerOdoCombustivel(lista); } catch(ePV){}
       fuelByMonth=bm; fuelTotal=tot; _fuelFetching=false;
       try { TCStore.setItem("tc_fuel_cache", JSON.stringify({byMonth:bm,total:tot,at:Date.now()})); } catch(e){}
       if(currentSection==="dashboard") renderDashboard();
@@ -4024,6 +4667,8 @@ function pushToServer(callback) {
       almoxDelta: mergeAlmoxDelta(_lp.almoxDelta, rd.almoxDelta),
       almoxNovos: mergeById(_lp.almoxNovos || [], rd.almoxNovos || []),
       manutKanban: mergeById(_lp.manutKanban || [], rd.manutKanban || []),
+      planoManut:  mergeById(_lp.planoManut  || [], rd.planoManut  || []),
+      execManut:   mergeById(_lp.execManut   || [], rd.execManut   || []),
       frota: (frotaPendente && _lp.frota && _lp.frota.length) ? _lp.frota : ((rd.frota && rd.frota.length) ? rd.frota : (_lp.frota || [])),
       osDelta:    mergeOSById(_lp.osDelta, rd.osDelta),
       savedAt:    Date.now()
@@ -4039,6 +4684,8 @@ function pushToServer(callback) {
     almoxMovs = merged.almoxMovs;
     if (merged.osDelta && merged.osDelta.length > 0) osData = mergeOSById(osData, merged.osDelta);
     if (merged.manutKanban) manutKanban = mergeById(manutKanban, merged.manutKanban);
+    if (merged.planoManut && merged.planoManut.length) planoManut = mergeById(planoManut, merged.planoManut);
+    if (merged.execManut) execManut = mergeById(execManut, merged.execManut);
     if (merged.frota && merged.frota.length) frota = merged.frota;
     _frotaEnviadaPush = frota;
     mkExtrairCarona(merged.quotes); mkLimparCarona();
@@ -4124,6 +4771,9 @@ function pullFromServer(callback) {
     // Salva osData no TCStore apos merge
     try { TCStore.setItem("tc_os_data", JSON.stringify(osData)); } catch(e){}
     if (rd.manutKanban) manutKanban = mergeById(manutKanban, rd.manutKanban);
+    if (rd.planoManut && rd.planoManut.length) planoManut = mergeById(planoManut, rd.planoManut);
+    if (rd.execManut) execManut = mergeById(execManut, rd.execManut);
+    try { lsSet("tc_plano_manut", JSON.stringify(planoManut)); lsSet("tc_exec_manut", JSON.stringify(execManut)); } catch(e){}
     aplicarFrotaRemota(rd.frota);
     mkExtrairCarona(rd.quotes); mkLimparCarona();
     try { mkDedup(); } catch(e){}
@@ -4188,6 +4838,7 @@ function refreshCurrentSection() {
   if (currentSection==="suppliers") renderSuppliers();
   if (currentSection==="expenses")  { buildExpenseFilters(); renderExpenses(); }
   if (currentSection==="quotes")    renderQuoteHistory();
+  if (currentSection==="pv")        renderPV();
 }
 var _origSaveAll = saveAll;
 saveAll = function() {
@@ -4242,6 +4893,8 @@ function criarSnapshot(forcado){
     if(!forcado && TCStore.getItem(chave)) return false;   // o de hoje ja existe
     var d=packData();
     d.manutKanban=manutKanban||[];
+    d.planoManut=planoManut||[];
+    d.execManut=execManut||[];
     d.frota=frota||[];
     d.osData=osData||[];
     d.criadoEm=Date.now();
@@ -4329,6 +4982,8 @@ function restaurarSnapshot(chave){
     if(d.osData)    osData=d.osData;
     else if(d.osDelta) osData=mergeOSById(osData, d.osDelta);
     if(d.manutKanban) manutKanban=d.manutKanban;
+    if(d.planoManut && d.planoManut.length) planoManut=d.planoManut;
+    if(d.execManut) execManut=d.execManut;
     if(d.frota && d.frota.length) frota=d.frota;
     if(d.almoxDelta || d.almoxNovos){
       almoxItems=deepCopy(DEFAULT_ALMOX);
@@ -4378,6 +5033,8 @@ function setAllData(obj) {
   if (obj.osData && obj.osData.length)   osData = mergeOSById(osData || [], obj.osData);
   aplicarFrotaRemota(obj.frota);
   if (obj.manutKanban) manutKanban = mergeById(manutKanban, obj.manutKanban);
+  if (obj.planoManut && obj.planoManut.length) planoManut = mergeById(planoManut, obj.planoManut);
+  if (obj.execManut) execManut = mergeById(execManut, obj.execManut);
   try { mkDedup(); } catch(e){}
   if (obj.quotes) { mkExtrairCarona(obj.quotes); }
   if (obj.almoxNovos && obj.almoxNovos.length) {
@@ -4512,6 +5169,8 @@ packData = function() {
   d.almoxNovos = novos;
   d.frota = frota;
   d.manutKanban = manutKanban;
+  d.planoManut  = planoManut;
+  d.execManut   = execManut;
   // O servidor so grava campos antigos: cada manutencao viaja como um registro proprio
   try {
     d.quotes = (d.quotes||[]).filter(function(q){ return !q || String(q.id||"").indexOf("__mk")!==0; });
@@ -7573,6 +8232,7 @@ var ALL_MODULES = [
   {k:"almox",     lb:"Almoxarifado"},
   {k:"os",        lb:"Ordens de Servico"},
   {k:"mk",        lb:"Manutencao Frota"},
+  {k:"pv",        lb:"Preventiva"},
   {k:"abast",     lb:"Abastecimentos"},
   {k:"settings",  lb:"Configuracoes"}
 ];
@@ -8135,7 +8795,7 @@ function validarPlacaNOS() {
       <input id="login-pass" type="password" style="width:100%;background:#0f2137;border:1px solid #1e3a5f;border-radius:8px;padding:11px 14px;color:#e2e8f0;font-size:14px;box-sizing:border-box;outline:none" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter')fazerLogin()">
     </div>
     <button onclick="fazerLogin()" style="width:100%;background:#f97316;border:none;border-radius:8px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Entrar</button>
-    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 89 - MEMORIA AMPLIADA (INDEXEDDB)</div>
+    <div style="text-align:center;margin-top:16px;font-size:14px;color:#22c55e;font-weight:700">TRANSCCEMA Transportes &bull; VERSAO 90 - MANUTENCAO PREVENTIVA (INDEXEDDB)</div>
   </div>
 </div>
 </body></html>
